@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Search, X, CheckCircle2, AlertCircle, ChevronRight, LogOut, KeyRound, Pencil, Shield, Eye } from 'lucide-react'
 import { api, getToken, setToken, setOnUnauthorized } from './api'
+import { Avatar, EditorAvatar, avatarPadrao, parseAvatar, serializeAvatar } from './avatar'
 
 const hoje = () => new Date().toISOString().slice(0, 10)
 const fmtData = (d) => (d ? new Date(d).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—')
@@ -52,11 +53,6 @@ function Coxinha({ size = 64 }) {
   )
 }
 
-function Avatar({ nome, grande }) {
-  const url = `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(nome || 'u')}&backgroundColor=f9c46b,ff9a5c,e5674b,fbe3a0,c8875e`
-  return <div className={'avatar' + (grande ? ' g' : '')}><img src={url} alt={nome} /></div>
-}
-
 const Tipo = ({ tipo }) => <span className="tipo-cel"><span>{TIPOS[tipo].emo}</span><span>{TIPOS[tipo].nome}</span></span>
 
 function StatusBadge({ status, temPagamentoPendente }) {
@@ -94,6 +90,8 @@ export default function App() {
   const [pag, setPag] = useState('painel')
   const [novaDivida, setNovaDivida] = useState(false)
   const [modalSenha, setModalSenha] = useState(false)
+  const [modalAvatar, setModalAvatar] = useState(false)
+  const [versaoAvatar, setVersaoAvatar] = useState(0)
   const [toast, setToast] = useState(null)
 
   const avisar = (msg, tipo = 'sucesso') => {
@@ -176,7 +174,9 @@ export default function App() {
           <div className="topo-acoes">
             {tem(PERM.DIVIDAS_CRIAR) && <button className="grande" onClick={abrirNova}><Plus size={18} />Nova dívida</button>}
             <div className="user-pill">
-              <Avatar nome={usuario.nome} />
+              <button type="button" className="avatar-btn" title="Personalizar avatar" onClick={() => setModalAvatar(true)}>
+                <Avatar nome={usuario.nome} avatar={usuario.avatar} />
+              </button>
               <div className="u-info">
                 <b>{usuario.nome}</b>
                 <small>{usuario.perfil}</small>
@@ -189,15 +189,31 @@ export default function App() {
       </header>
 
       <div className="pagina">
-        {pag === 'painel' && <Painel exec={exec} irPara={setPag} usuarioLogado={usuario} tem={tem} />}
-        {pag === 'dividas' && <Dividas exec={exec} nova={novaDivida} setNova={setNovaDivida} tem={tem} usuarioLogado={usuario} />}
-        {pag === 'usuarios' && <Usuarios exec={exec} tem={tem} usuarioLogado={usuario} />}
+        {pag === 'painel' && <Painel key={versaoAvatar} exec={exec} irPara={setPag} usuarioLogado={usuario} tem={tem} />}
+        {pag === 'dividas' && <Dividas key={versaoAvatar} exec={exec} nova={novaDivida} setNova={setNovaDivida} tem={tem} usuarioLogado={usuario} />}
+        {pag === 'usuarios' && (
+          <Usuarios
+            key={versaoAvatar}
+            exec={exec}
+            tem={tem}
+            usuarioLogado={usuario}
+            onUpdateSessao={(u) => setUsuario((prev) => (prev && prev.id === u.id ? { ...prev, nome: u.nome, email: u.email, avatar: u.avatar } : prev))}
+          />
+        )}
         {pag === 'motivos' && <Motivos exec={exec} tem={tem} />}
         {pag === 'perfis' && <Perfis exec={exec} />}
         {!abas.length && <div className="card"><Vazio texto="Seu perfil não possui permissões de visualização." emo="🔒" /></div>}
       </div>
 
       {modalSenha && <ModalAlterarSenha exec={exec} onClose={() => setModalSenha(false)} />}
+      {modalAvatar && (
+        <ModalAlterarAvatar
+          usuario={usuario}
+          exec={exec}
+          onSaved={(u) => { setUsuario(u); setVersaoAvatar((v) => v + 1); setModalAvatar(false) }}
+          onClose={() => setModalAvatar(false)}
+        />
+      )}
 
       {toast && (
         <div className={'toast ' + toast.tipo}>
@@ -270,6 +286,23 @@ function ModalAlterarSenha({ exec, onClose }) {
   )
 }
 
+function ModalAlterarAvatar({ usuario, exec, onSaved, onClose }) {
+  const [avatar, setAvatar] = useState(() => parseAvatar(usuario.avatar) || avatarPadrao('M'))
+  const salvar = async (e) => {
+    e.preventDefault()
+    const atualizado = await exec(() => api.alterarAvatar(serializeAvatar(avatar)), 'Avatar atualizado!')
+    if (atualizado?.id) onSaved(atualizado)
+  }
+  return (
+    <Modal peq titulo="Meu avatar 🎨" onClose={onClose}
+      rodape={<><button className="sec" onClick={onClose}>Cancelar</button><button form="f-avatar">Salvar</button></>}>
+      <form id="f-avatar" onSubmit={salvar}>
+        <EditorAvatar nome={usuario.nome} value={avatar} onChange={setAvatar} />
+      </form>
+    </Modal>
+  )
+}
+
 function Kpis({ dividas, usuarios }) {
   const abertas = dividas.filter((d) => d.status === 'Aceita').length
   const pago = dividas.filter((d) => d.status === 'Quitada').reduce((a, d) => a + (d.valorPago || 0), 0)
@@ -315,10 +348,13 @@ function Painel({ exec, irPara, usuarioLogado, tem }) {
   const ranking = useMemo(() => {
     const m = {}
     dividas.filter((d) => d.status === 'Aceita')
-      .forEach((d) => { m[d.usuario] = (m[d.usuario] || 0) + 1 })
-    return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 5)
+      .forEach((d) => {
+        if (!m[d.usuario]) m[d.usuario] = { qtd: 0, avatar: d.usuarioAvatar }
+        m[d.usuario].qtd += 1
+      })
+    return Object.entries(m).sort((a, b) => b[1].qtd - a[1].qtd).slice(0, 5)
   }, [dividas])
-  const max = ranking[0]?.[1] || 1
+  const max = ranking[0]?.[1]?.qtd || 1
 
   const atualizarDetalhe = (nova) => {
     setDetalhe(nova)
@@ -365,13 +401,13 @@ function Painel({ exec, irPara, usuarioLogado, tem }) {
           <div className="card-cab"><h3>Maiores devedores</h3></div>
           {ranking.length ? (
             <div className="rank">
-              {ranking.map(([nome, qtd], i) => (
+              {ranking.map(([nome, info], i) => (
                 <div className="rank-item" key={nome}>
                   <div className="pos">{i + 1}</div>
-                  <Avatar nome={nome} />
+                  <Avatar nome={nome} avatar={info.avatar} />
                   <div className="info">
-                    <div className="linha"><b>{nome}</b><small>{qtd} dívida{qtd > 1 ? 's' : ''}</small></div>
-                    <div className="progresso"><div style={{ width: `${(qtd / max) * 100}%` }} /></div>
+                    <div className="linha"><b>{nome}</b><small>{info.qtd} dívida{info.qtd > 1 ? 's' : ''}</small></div>
+                    <div className="progresso"><div style={{ width: `${(info.qtd / max) * 100}%` }} /></div>
                   </div>
                 </div>
               ))}
@@ -393,7 +429,7 @@ function Painel({ exec, irPara, usuarioLogado, tem }) {
             {semDividas.map((u) => (
               <div key={u.id} className="limpo-card" onClick={() => setPessoaSel(u.id)}>
                 <div className="limpo-top">
-                  <Avatar nome={u.nome} />
+                  <Avatar nome={u.nome} avatar={u.avatar} />
                   <div>
                     <b>{u.nome}</b>
                     <small>{u.totalDividas ? `${u.totalDividas} quitada(s) no histórico` : 'Ficha 100% zerada!'}</small>
@@ -449,7 +485,7 @@ function TabelaDividas({ dividas, mostrarUsuario, compacta, onVer }) {
         <tbody>
           {dividas.map((d) => (
             <tr key={d.id} style={onVer ? { cursor: 'pointer' } : undefined} onClick={() => onVer && onVer(d)}>
-              {mostrarUsuario && <td><div className="pessoa-cel"><Avatar nome={d.usuario} />{d.usuario}</div></td>}
+              {mostrarUsuario && <td><div className="pessoa-cel"><Avatar nome={d.usuario} avatar={d.usuarioAvatar} />{d.usuario}</div></td>}
               <td><Tipo tipo={d.tipo} /></td>
               <td>
                 <b>{d.motivo}</b>
@@ -538,7 +574,7 @@ function ModalDetalheDivida({ divida: d, exec, tem, usuarioLogado, onUpdate, onC
     <Modal titulo={`Dívida #${d.id} · ${d.usuario}`} onClose={onClose}>
       <div className="resumo-pessoa" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          <Avatar nome={d.usuario} grande />
+          <Avatar nome={d.usuario} avatar={d.usuarioAvatar} grande />
           <div>
             <h2>{d.usuario}</h2>
             <p><Tipo tipo={d.tipo} /> · <b>{d.motivo}</b></p>
@@ -809,7 +845,7 @@ function Situacao({ id, exec, tem, usuarioLogado, onClose }) {
     <>
       <Modal titulo="Situação" onClose={onClose}>
         <div className="resumo-pessoa">
-          <Avatar nome={s.usuario.nome} grande />
+          <Avatar nome={s.usuario.nome} avatar={s.usuario.avatar} grande />
           <div>
             <h2>{s.usuario.nome}</h2>
             <p>{s.usuario.email} · {s.usuario.perfil} · {s.abertas.length} em aberto · {s.historico.length} no histórico</p>
@@ -842,13 +878,13 @@ function Situacao({ id, exec, tem, usuarioLogado, onClose }) {
   )
 }
 
-function Usuarios({ exec, tem, usuarioLogado }) {
+function Usuarios({ exec, tem, usuarioLogado, onUpdateSessao }) {
   const [usuarios, setUsuarios] = useState([])
   const [perfis, setPerfis] = useState([])
   const [busca, setBusca] = useState('')
   const [sel, setSel] = useState(null)
   const [editando, setEditando] = useState(null)
-  const [form, setForm] = useState({ nome: '', email: '', senha: '', perfilId: '' })
+  const [form, setForm] = useState({ nome: '', email: '', senha: '', perfilId: '', avatar: avatarPadrao('M') })
   const podeGerenciar = tem(PERM.USUARIOS_GERENCIAR)
 
   const carregar = () => exec(api.usuarios).then((u) => Array.isArray(u) && setUsuarios(u))
@@ -858,21 +894,26 @@ function Usuarios({ exec, tem, usuarioLogado }) {
   }, [podeGerenciar])
 
   const abrirNovo = () => {
-    setForm({ nome: '', email: '', senha: '', perfilId: perfis[0]?.id ?? '' })
+    setForm({ nome: '', email: '', senha: '', perfilId: perfis[0]?.id ?? '', avatar: avatarPadrao('M') })
     setEditando('novo')
   }
   const abrirEdicao = (e, u) => {
     e.stopPropagation()
-    setForm({ nome: u.nome, email: u.email, senha: '', perfilId: u.perfilId })
+    setForm({ nome: u.nome, email: u.email, senha: '', perfilId: u.perfilId, avatar: parseAvatar(u.avatar) || avatarPadrao('M') })
     setEditando(u)
   }
 
   const salvar = async (e) => {
     e.preventDefault()
+    const avatarJson = serializeAvatar(form.avatar)
     const ok = editando === 'novo'
-      ? await exec(() => api.criarUsuario({ nome: form.nome, email: form.email, senha: form.senha, perfilId: +form.perfilId }), 'Usuário criado!')
-      : await exec(() => api.atualizarUsuario(editando.id, { nome: form.nome, email: form.email, perfilId: +form.perfilId, novaSenha: form.senha || null }), 'Usuário atualizado!')
-    if (ok) { setEditando(null); carregar() }
+      ? await exec(() => api.criarUsuario({ nome: form.nome, email: form.email, senha: form.senha, perfilId: +form.perfilId, avatar: avatarJson }), 'Usuário criado!')
+      : await exec(() => api.atualizarUsuario(editando.id, { nome: form.nome, email: form.email, perfilId: +form.perfilId, novaSenha: form.senha || null, avatar: avatarJson }), 'Usuário atualizado!')
+    if (ok) {
+      if (editando !== 'novo' && ok?.id && onUpdateSessao) onUpdateSessao(ok)
+      setEditando(null)
+      carregar()
+    }
   }
 
   const alternar = async (e, u) => {
@@ -896,7 +937,7 @@ function Usuarios({ exec, tem, usuarioLogado }) {
           <div className="pessoas">
             {lista.map((u) => (
               <div key={u.id} className="pessoa" style={{ opacity: u.ativo ? 1 : .55 }} onClick={() => setSel(u.id)}>
-                <Avatar nome={u.nome} grande />
+                <Avatar nome={u.nome} avatar={u.avatar} grande />
                 <h4>{u.nome}</h4>
                 <small>{u.email}</small>
                 <span className="badge b-neutro"><Shield size={12} />{u.perfil}</span>
@@ -924,6 +965,7 @@ function Usuarios({ exec, tem, usuarioLogado }) {
         <Modal peq titulo={editando === 'novo' ? 'Novo usuário' : 'Editar usuário'} onClose={() => setEditando(null)}
           rodape={<><button className="sec" onClick={() => setEditando(null)}>Cancelar</button><button form="f-user">Salvar</button></>}>
           <form id="f-user" className="coluna" onSubmit={salvar}>
+            <EditorAvatar nome={form.nome} value={form.avatar} onChange={(avatar) => setForm({ ...form, avatar })} />
             <label>Nome completo<input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required /></label>
             <label>E-mail<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></label>
             <label>Perfil

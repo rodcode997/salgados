@@ -68,6 +68,28 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
 
+    // Garante coluna Avatar em bancos SQLite já existentes
+    var conn = db.Database.GetDbConnection();
+    conn.Open();
+    using (var cmd = conn.CreateCommand())
+    {
+        cmd.CommandText = "PRAGMA table_info(Usuarios);";
+        var temAvatar = false;
+        using (var reader = cmd.ExecuteReader())
+        {
+            while (reader.Read())
+                if (string.Equals(reader.GetString(1), "Avatar", StringComparison.OrdinalIgnoreCase))
+                    temAvatar = true;
+        }
+        if (!temAvatar)
+        {
+            using var alter = conn.CreateCommand();
+            alter.CommandText = "ALTER TABLE Usuarios ADD COLUMN Avatar TEXT;";
+            alter.ExecuteNonQuery();
+        }
+    }
+    conn.Close();
+
     if (!db.Usuarios.Any())
     {
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<Usuario>>();

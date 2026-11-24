@@ -27,6 +27,11 @@ public class AuthController(IAuthService service) : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("avatar")]
+    [Authorize]
+    public Task<UsuarioSessaoDto> AlterarAvatar(AlterarAvatarInput input) =>
+        service.AlterarAvatarAsync(ObterUsuarioId(), input);
+
     private int ObterUsuarioId() =>
         int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new NaoAutorizadoException("Token inválido."));
 }

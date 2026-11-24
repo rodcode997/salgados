@@ -34,7 +34,7 @@ public record PagamentoDto(
     string? MotivoRecusa);
 
 public record DividaDto(
-    int Id, int UsuarioId, string Usuario, int MotivoId, string Motivo,
+    int Id, int UsuarioId, string Usuario, string? UsuarioAvatar, int MotivoId, string Motivo,
     TipoDivida Tipo, string TipoDescricao, string? Observacao,
     DateTime DataAquisicao,
     StatusDivida Status, string StatusDescricao,
@@ -48,8 +48,9 @@ public record DividaDto(
 // Autenticação, Usuários (Pessoas), Perfis e Permissões
 public record LoginInput([Required, EmailAddress] string Email, [Required] string Senha);
 public record AlterarSenhaInput([Required] string SenhaAtual, [Required, MinLength(6)] string NovaSenha);
+public record AlterarAvatarInput([MaxLength(500)] string? Avatar);
 
-public record UsuarioSessaoDto(int Id, string Nome, string Email, int PerfilId, string Perfil, List<string> Permissoes);
+public record UsuarioSessaoDto(int Id, string Nome, string Email, string? Avatar, int PerfilId, string Perfil, List<string> Permissoes);
 public record LoginDto(string Token, DateTime ExpiraEm, UsuarioSessaoDto Usuario);
 
 public record PermissaoDto(int Id, string Codigo, string Descricao, string Modulo);
@@ -67,16 +68,18 @@ public record UsuarioCreateInput(
     [Required, MaxLength(150)] string Nome,
     [Required, EmailAddress, MaxLength(200)] string Email,
     [Required, MinLength(6)] string Senha,
-    [Range(1, int.MaxValue)] int PerfilId);
+    [Range(1, int.MaxValue)] int PerfilId,
+    [MaxLength(500)] string? Avatar = null);
 
 public record UsuarioUpdateInput(
     [Required, MaxLength(150)] string Nome,
     [Required, EmailAddress, MaxLength(200)] string Email,
     [Range(1, int.MaxValue)] int PerfilId,
-    string? NovaSenha);
+    string? NovaSenha,
+    [MaxLength(500)] string? Avatar = null);
 
 public record UsuarioDto(
-    int Id, string Nome, string Email, bool Ativo,
+    int Id, string Nome, string Email, string? Avatar, bool Ativo,
     DateTime CriadoEm, int PerfilId, string Perfil,
     int DividasAbertas, int TotalDividas, string? Mensagem);
 

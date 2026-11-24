@@ -121,6 +121,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(u => u.Nome).HasMaxLength(150).IsRequired();
             e.Property(u => u.Email).HasMaxLength(200).IsRequired();
             e.Property(u => u.SenhaHash).IsRequired();
+            e.Property(u => u.Avatar).HasMaxLength(500);
             e.HasIndex(u => u.Email).IsUnique();
             e.HasOne(u => u.Perfil).WithMany(p => p.Usuarios).HasForeignKey(u => u.PerfilId).OnDelete(DeleteBehavior.Restrict);
         });

@@ -65,7 +65,7 @@ public static class Mapper
         p.MotivoRecusa);
 
     public static DividaDto ToDto(Divida d) => new(
-        d.Id, d.UsuarioId, d.Usuario?.Nome ?? "", d.MotivoId, d.Motivo?.Descricao ?? "",
+        d.Id, d.UsuarioId, d.Usuario?.Nome ?? "", d.Usuario?.Avatar, d.MotivoId, d.Motivo?.Descricao ?? "",
         d.Tipo, Descricao(d.Tipo), d.Observacao,
         d.DataAquisicao,
         d.Status, Descricao(d.Status),
@@ -88,12 +88,12 @@ public static class Mapper
         var abertas = u.Dividas.Count(d => d.Status == StatusDivida.Aceita);
         var totalValidas = u.Dividas.Count(d => d.Status is StatusDivida.Aceita or StatusDivida.Quitada);
         return new UsuarioDto(
-            u.Id, u.Nome, u.Email, u.Ativo, u.CriadoEm, u.PerfilId, u.Perfil?.Nome ?? "",
+            u.Id, u.Nome, u.Email, u.Avatar, u.Ativo, u.CriadoEm, u.PerfilId, u.Perfil?.Nome ?? "",
             abertas, totalValidas, abertas == 0 ? MensagemParabens : null);
     }
 
     public static UsuarioSessaoDto ToSessaoDto(Usuario u) => new(
-        u.Id, u.Nome, u.Email, u.PerfilId, u.Perfil?.Nome ?? "",
+        u.Id, u.Nome, u.Email, u.Avatar, u.PerfilId, u.Perfil?.Nome ?? "",
         u.Perfil?.Permissoes.Where(pp => pp.Permissao != null).Select(pp => pp.Permissao!.Codigo).Distinct().ToList() ?? []);
 }
 
@@ -359,6 +359,7 @@ public interface IAuthService
     Task<LoginDto> LoginAsync(LoginInput input);
     Task<UsuarioSessaoDto> ObterSessaoAsync(int usuarioId);
     Task AlterarSenhaAsync(int usuarioId, AlterarSenhaInput input);
+    Task<UsuarioSessaoDto> AlterarAvatarAsync(int usuarioId, AlterarAvatarInput input);
 }
 
 public class AuthService(IUsuarioRepository usuarios, IPasswordHasher<Usuario> hasher, IConfiguration config) : IAuthService
@@ -421,6 +422,14 @@ public class AuthService(IUsuarioRepository usuarios, IPasswordHasher<Usuario> h
             throw new RegraNegocioException("Senha atual incorreta.");
         u.SenhaHash = hasher.HashPassword(u, input.NovaSenha);
         await usuarios.SalvarAsync();
+    }
+
+    public async Task<UsuarioSessaoDto> AlterarAvatarAsync(int usuarioId, AlterarAvatarInput input)
+    {
+        var u = await usuarios.ObterAsync(usuarioId) ?? throw new NaoEncontradoException("Usuário não encontrado.");
+        u.Avatar = string.IsNullOrWhiteSpace(input.Avatar) ? null : input.Avatar.Trim();
+        await usuarios.SalvarAsync();
+        return Mapper.ToSessaoDto(u);
     }
 }
 
@@ -534,7 +543,8 @@ public class UsuarioService(IUsuarioRepository repo, IPerfilRepository perfis, I
         {
             Nome = input.Nome.Trim(),
             Email = email,
-            PerfilId = input.PerfilId
+            PerfilId = input.PerfilId,
+            Avatar = string.IsNullOrWhiteSpace(input.Avatar) ? null : input.Avatar.Trim()
         };
         u.SenhaHash = hasher.HashPassword(u, input.Senha);
         await repo.AdicionarAsync(u);
@@ -556,6 +566,7 @@ public class UsuarioService(IUsuarioRepository repo, IPerfilRepository perfis, I
         u.Nome = input.Nome.Trim();
         u.Email = email;
         u.PerfilId = input.PerfilId;
+        u.Avatar = string.IsNullOrWhiteSpace(input.Avatar) ? null : input.Avatar.Trim();
         if (!string.IsNullOrWhiteSpace(input.NovaSenha))
         {
             if (input.NovaSenha.Length < 6)

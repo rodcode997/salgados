@@ -927,3 +927,27 @@ textarea:focus { border-color: var(--laranja); }
 .limpo-top b { display: block; font-size: 16px; }
 .limpo-top small { color: var(--txt-2); font-size: 12px; }
 .limpo-msg { background: #e8fbf0; color: #126b35; font-size: 13px; font-weight: 700; padding: 8px 12px; border-radius: 12px; }
+
+/* Editor de Avatar */
+.avatar-btn { background: none; border: none; padding: 0; border-radius: 50%; box-shadow: none; cursor: pointer; display: flex; transition: transform .15s; }
+.avatar-btn:hover { background: none; transform: scale(1.08); }
+
+.avatar-editor { background: #fffaf2; border: 2px solid var(--borda); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.avatar-preview { display: flex; align-items: center; gap: 14px; }
+.avatar-preview-info { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.avatar-preview-info b { font-size: 14px; color: var(--txt); }
+.avatar-genero { display: inline-flex; gap: 6px; }
+.avatar-genero button { padding: 5px 12px; font-size: 13px; border-radius: 999px; background: #fff; color: var(--txt-2); border: 1.5px solid var(--borda); box-shadow: none; }
+.avatar-genero button:hover { border-color: var(--laranja); color: var(--txt); background: #fff; }
+.avatar-genero button.ativo { background: var(--laranja); color: #fff; border-color: var(--laranja); }
+
+.avatar-cores { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.avatar-lbl { display: block; font-size: 12px; font-weight: 700; color: var(--txt-2); margin-bottom: 6px; }
+.cor-lista { display: flex; gap: 7px; flex-wrap: wrap; }
+.cor-dot { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1.5px var(--borda); cursor: pointer; transition: transform .12s; }
+.cor-dot:hover { transform: scale(1.12); }
+.cor-dot.ativo { box-shadow: 0 0 0 2.5px var(--laranja); transform: scale(1.12); }
+
+.avatar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.avatar-grid label { font-size: 12px; }
+.avatar-grid select { padding: 8px 10px; font-size: 13px; }
