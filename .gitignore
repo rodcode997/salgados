@@ -1,0 +1,59 @@
+# ==========================================
+# Arquivos de Build e Compilação (.NET / C#)
+# ==========================================
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+*.user
+*.userosscache
+*.sln.docstates
+
+# ==========================================
+# Dependências e Pacotes
+# ==========================================
+node_modules/
+dist/
+build/
+.venv/
+packages/
+
+# ==========================================
+# Arquivos Sensíveis e Ambiente
+# ==========================================
+.env
+.env.*
+*.pem
+*.key
+appsettings.Development.json
+appsettings.Local.json
+
+# ==========================================
+# IDEs / Editores
+# ==========================================
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userprefs
+
+# VS Code
+.vscode/
+
+# JetBrains (Rider / ReSharper)
+.idea/
+*_ReSharper*/
+
+# ==========================================
+# Logs e Banco de Dados Local
+# ==========================================
+*.log
+*.sqlite
+*.sqlite3
+
+# ==========================================
+# Sistema Operacional
+# ==========================================
+Thumbs.db
+desktop.ini
+.DS_Store
