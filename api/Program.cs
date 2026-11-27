@@ -36,6 +36,7 @@ builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
 builder.Services.AddScoped<IProdutoRepository, ProdutoRepository>();
 builder.Services.AddScoped<IGrupoPagamentoRepository, GrupoPagamentoRepository>();
+builder.Services.AddScoped<ILeiBaseRepository, LeiBaseRepository>();
 
 builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddScoped<IMotivoService, MotivoService>();
@@ -46,6 +47,7 @@ builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IConfiguracaoService, ConfiguracaoService>();
 builder.Services.AddScoped<IProdutoService, ProdutoService>();
 builder.Services.AddScoped<IGrupoPagamentoService, GrupoPagamentoService>();
+builder.Services.AddScoped<ILeiBaseService, LeiBaseService>();
 builder.Services.AddScoped<IAniversarioService, AniversarioService>();
 builder.Services.AddHostedService<AniversarioHostedService>();
 
@@ -132,6 +134,18 @@ using (var scope = app.Services.CreateScope())
             {
                 using var alter = conn.CreateCommand();
                 alter.CommandText = "ALTER TABLE Usuarios ADD COLUMN DeveAlterarSenha INTEGER NOT NULL DEFAULT 0;";
+                alter.ExecuteNonQuery();
+            }
+            if (!cols.Contains("VersaoLeiAceita"))
+            {
+                using var alter = conn.CreateCommand();
+                alter.CommandText = "ALTER TABLE Usuarios ADD COLUMN VersaoLeiAceita INTEGER NOT NULL DEFAULT 0;";
+                alter.ExecuteNonQuery();
+            }
+            if (!cols.Contains("LeiAceitaEm"))
+            {
+                using var alter = conn.CreateCommand();
+                alter.CommandText = "ALTER TABLE Usuarios ADD COLUMN LeiAceitaEm TEXT NULL;";
                 alter.ExecuteNonQuery();
             }
             using var updAdmin = conn.CreateCommand();
@@ -235,6 +249,57 @@ using (var scope = app.Services.CreateScope())
                 alter.CommandText = "ALTER TABLE GruposPagamento ADD COLUMN DataCompra TEXT NULL;";
                 alter.ExecuteNonQuery();
             }
+        }
+        using (var leiCmd = conn.CreateCommand())
+        {
+            leiCmd.CommandText = """
+                CREATE TABLE IF NOT EXISTS LeisBase (
+                    Id INTEGER NOT NULL CONSTRAINT PK_LeisBase PRIMARY KEY,
+                    Titulo TEXT NOT NULL,
+                    Tipo TEXT NOT NULL DEFAULT 'Texto',
+                    Conteudo TEXT NOT NULL,
+                    ArquivoNome TEXT NULL,
+                    ArquivoBytes BLOB NULL,
+                    Versao INTEGER NOT NULL DEFAULT 0,
+                    AtualizadoEm TEXT NULL,
+                    AtualizadoPorId INTEGER NULL,
+                    CONSTRAINT FK_LeisBase_Usuarios_AtualizadoPorId FOREIGN KEY (AtualizadoPorId) REFERENCES Usuarios (Id) ON DELETE RESTRICT
+                );
+                """;
+            leiCmd.ExecuteNonQuery();
+        }
+        using (var leiColsCmd = conn.CreateCommand())
+        {
+            leiColsCmd.CommandText = "PRAGMA table_info(LeisBase);";
+            var leiCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var reader = leiColsCmd.ExecuteReader())
+            {
+                while (reader.Read())
+                    leiCols.Add(reader.GetString(1));
+            }
+            if (!leiCols.Contains("Tipo"))
+            {
+                using var alter = conn.CreateCommand();
+                alter.CommandText = "ALTER TABLE LeisBase ADD COLUMN Tipo TEXT NOT NULL DEFAULT 'Texto';";
+                alter.ExecuteNonQuery();
+            }
+            if (!leiCols.Contains("ArquivoNome"))
+            {
+                using var alter = conn.CreateCommand();
+                alter.CommandText = "ALTER TABLE LeisBase ADD COLUMN ArquivoNome TEXT NULL;";
+                alter.ExecuteNonQuery();
+            }
+            if (!leiCols.Contains("ArquivoBytes"))
+            {
+                using var alter = conn.CreateCommand();
+                alter.CommandText = "ALTER TABLE LeisBase ADD COLUMN ArquivoBytes BLOB NULL;";
+                alter.ExecuteNonQuery();
+            }
+        }
+        using (var seedLeiCmd = conn.CreateCommand())
+        {
+            seedLeiCmd.CommandText = "INSERT OR IGNORE INTO LeisBase (Id, Titulo, Tipo, Conteudo, Versao) VALUES (1, 'Lei Base dos Salgados', 'Texto', '', 0);";
+            seedLeiCmd.ExecuteNonQuery();
         }
         conn.Close();
     }

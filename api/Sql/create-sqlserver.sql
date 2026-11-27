@@ -495,3 +495,117 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127143938_AddLeiBase'
+)
+BEGIN
+    ALTER TABLE [Usuarios] ADD [LeiAceitaEm] datetime2 NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127143938_AddLeiBase'
+)
+BEGIN
+    ALTER TABLE [Usuarios] ADD [VersaoLeiAceita] int NOT NULL DEFAULT 0;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127143938_AddLeiBase'
+)
+BEGIN
+    CREATE TABLE [LeisBase] (
+        [Id] int NOT NULL IDENTITY,
+        [Titulo] nvarchar(200) NOT NULL,
+        [Conteudo] nvarchar(max) NOT NULL,
+        [Versao] int NOT NULL,
+        [AtualizadoEm] datetime2 NULL,
+        [AtualizadoPorId] int NULL,
+        CONSTRAINT [PK_LeisBase] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_LeisBase_Usuarios_AtualizadoPorId] FOREIGN KEY ([AtualizadoPorId]) REFERENCES [Usuarios] ([Id]) ON DELETE NO ACTION
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127143938_AddLeiBase'
+)
+BEGIN
+    IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'Id', N'AtualizadoEm', N'AtualizadoPorId', N'Conteudo', N'Titulo', N'Versao') AND [object_id] = OBJECT_ID(N'[LeisBase]'))
+        SET IDENTITY_INSERT [LeisBase] ON;
+    EXEC(N'INSERT INTO [LeisBase] ([Id], [AtualizadoEm], [AtualizadoPorId], [Conteudo], [Titulo], [Versao])
+    VALUES (1, NULL, NULL, N'''', N''Lei Base dos Salgados'', 0)');
+    IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [name] IN (N'Id', N'AtualizadoEm', N'AtualizadoPorId', N'Conteudo', N'Titulo', N'Versao') AND [object_id] = OBJECT_ID(N'[LeisBase]'))
+        SET IDENTITY_INSERT [LeisBase] OFF;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127143938_AddLeiBase'
+)
+BEGIN
+    CREATE INDEX [IX_LeisBase_AtualizadoPorId] ON [LeisBase] ([AtualizadoPorId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127143938_AddLeiBase'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261127143938_AddLeiBase', N'10.0.15');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127144547_AddLeiBasePdf'
+)
+BEGIN
+    ALTER TABLE [LeisBase] ADD [ArquivoBytes] varbinary(max) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127144547_AddLeiBasePdf'
+)
+BEGIN
+    ALTER TABLE [LeisBase] ADD [ArquivoNome] nvarchar(255) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127144547_AddLeiBasePdf'
+)
+BEGIN
+    ALTER TABLE [LeisBase] ADD [Tipo] nvarchar(20) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127144547_AddLeiBasePdf'
+)
+BEGIN
+    EXEC(N'UPDATE [LeisBase] SET [ArquivoBytes] = NULL, [ArquivoNome] = NULL, [Tipo] = N''Texto''
+    WHERE [Id] = 1;
+    SELECT @@ROWCOUNT');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261127144547_AddLeiBasePdf'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261127144547_AddLeiBasePdf', N'10.0.15');
+END;
+
+COMMIT;
+GO
+

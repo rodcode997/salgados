@@ -92,8 +92,8 @@ public static class Mapper
             abertas, totalValidas, abertas == 0 ? MensagemParabens : null);
     }
 
-    public static UsuarioSessaoDto ToSessaoDto(Usuario u) => new(
-        u.Id, u.Nome, u.Login, u.DataNascimento, u.Avatar, u.DeveAlterarSenha, u.PerfilId, u.Perfil?.Nome ?? "",
+    public static UsuarioSessaoDto ToSessaoDto(Usuario u, bool deveAceitarLei = false) => new(
+        u.Id, u.Nome, u.Login, u.DataNascimento, u.Avatar, u.DeveAlterarSenha, deveAceitarLei, u.PerfilId, u.Perfil?.Nome ?? "",
         u.Perfil?.Permissoes.Where(pp => pp.Permissao != null).Select(pp => pp.Permissao!.Codigo).Distinct().ToList() ?? []);
 }
 
@@ -367,15 +367,27 @@ public interface IAuthService
     Task<UsuarioSessaoDto> ObterSessaoAsync(int usuarioId);
     Task AlterarSenhaAsync(int usuarioId, AlterarSenhaInput input);
     Task<UsuarioSessaoDto> AlterarAvatarAsync(int usuarioId, AlterarAvatarInput input);
+    Task<UsuarioSessaoDto> AlterarPerfilAsync(int usuarioId, AlterarPerfilInput input);
     Task<UsuarioSessaoDto> ConcluirPrimeiroAcessoAsync(int usuarioId, PrimeiroAcessoInput input);
+    Task<UsuarioSessaoDto> AceitarLeiAsync(int usuarioId);
 }
 
 public class AuthService(
     IUsuarioRepository usuarios,
     IPasswordHasher<Usuario> hasher,
     IConfiguration config,
-    IAniversarioService aniversarios) : IAuthService
+    IAniversarioService aniversarios,
+    ILeiBaseRepository leisBase) : IAuthService
 {
+    private async Task<bool> DeveAceitarLeiAsync(Usuario u)
+    {
+        var lei = await leisBase.ObterAsync();
+        var temConteudo = lei.Tipo == "Pdf"
+            ? lei.ArquivoBytes is { Length: > 0 }
+            : !string.IsNullOrWhiteSpace(lei.Conteudo);
+        return lei.Versao > 0 && temConteudo && u.VersaoLeiAceita < lei.Versao;
+    }
+
     public async Task<LoginDto> LoginAsync(LoginInput input)
     {
         var login = input.Login.Trim().ToLowerInvariant();
@@ -389,7 +401,7 @@ public class AuthService(
         if (verif == PasswordVerificationResult.Failed)
             throw new NaoAutorizadoException("Login ou senha inválidos.");
 
-        var sessao = Mapper.ToSessaoDto(u);
+        var sessao = Mapper.ToSessaoDto(u, await DeveAceitarLeiAsync(u));
         var horas = config.GetValue("Jwt:ExpiraHoras", 12);
         var expira = DateTime.UtcNow.AddHours(horas);
 
@@ -423,7 +435,7 @@ public class AuthService(
         var u = await usuarios.ObterAsync(usuarioId) ?? throw new NaoAutorizadoException("Sessão inválida.");
         if (!u.Ativo || u.Perfil is null || !u.Perfil.Ativo)
             throw new NaoAutorizadoException("Usuário ou perfil inativo.");
-        return Mapper.ToSessaoDto(u);
+        return Mapper.ToSessaoDto(u, await DeveAceitarLeiAsync(u));
     }
 
     public async Task AlterarSenhaAsync(int usuarioId, AlterarSenhaInput input)
@@ -444,7 +456,21 @@ public class AuthService(
         var u = await usuarios.ObterAsync(usuarioId) ?? throw new NaoEncontradoException("Usuário não encontrado.");
         u.Avatar = string.IsNullOrWhiteSpace(input.Avatar) ? null : input.Avatar.Trim();
         await usuarios.SalvarAsync();
-        return Mapper.ToSessaoDto(u);
+        return Mapper.ToSessaoDto(u, await DeveAceitarLeiAsync(u));
+    }
+
+    public async Task<UsuarioSessaoDto> AlterarPerfilAsync(int usuarioId, AlterarPerfilInput input)
+    {
+        var u = await usuarios.ObterAsync(usuarioId) ?? throw new NaoEncontradoException("Usuário não encontrado.");
+        if (input.DataNascimento.Date > DateTime.Today)
+            throw new RegraNegocioException("Data de nascimento não pode ser futura.");
+
+        u.Avatar = string.IsNullOrWhiteSpace(input.Avatar) ? null : input.Avatar.Trim();
+        u.DataNascimento = input.DataNascimento.Date;
+        await usuarios.SalvarAsync();
+
+        await aniversarios.ProcessarUsuarioAsync(u.Id);
+        return Mapper.ToSessaoDto(u, await DeveAceitarLeiAsync(u));
     }
 
     public async Task<UsuarioSessaoDto> ConcluirPrimeiroAcessoAsync(int usuarioId, PrimeiroAcessoInput input)
@@ -467,7 +493,17 @@ public class AuthService(
         await usuarios.SalvarAsync();
 
         await aniversarios.ProcessarUsuarioAsync(u.Id);
-        return Mapper.ToSessaoDto(u);
+        return Mapper.ToSessaoDto(u, await DeveAceitarLeiAsync(u));
+    }
+
+    public async Task<UsuarioSessaoDto> AceitarLeiAsync(int usuarioId)
+    {
+        var u = await usuarios.ObterAsync(usuarioId) ?? throw new NaoEncontradoException("Usuário não encontrado.");
+        var lei = await leisBase.ObterAsync();
+        u.VersaoLeiAceita = lei.Versao;
+        u.LeiAceitaEm = DateTime.Now;
+        await usuarios.SalvarAsync();
+        return Mapper.ToSessaoDto(u, deveAceitarLei: false);
     }
 }
 
@@ -1064,5 +1100,73 @@ public class GrupoPagamentoService(
         g.Status = StatusGrupoPagamento.Cancelado;
         g.FechadoEm = DateTime.Now;
         await repo.SalvarAsync();
+    }
+}
+
+public interface ILeiBaseService
+{
+    Task<LeiBaseDto> ObterAsync();
+    Task<LeiBaseDto> AtualizarAsync(LeiBaseInput input, int atualizadoPorId);
+    Task<LeiBaseDto> AtualizarPdfAsync(string titulo, string arquivoNome, byte[] bytes, int atualizadoPorId);
+    Task<(byte[] Bytes, string Nome)> ObterPdfAsync();
+}
+
+public class LeiBaseService(ILeiBaseRepository repo) : ILeiBaseService
+{
+    private static LeiBaseDto ToDto(LeiBase l) =>
+        new(l.Titulo, l.Tipo, l.Conteudo, l.ArquivoNome, l.ArquivoBytes is { Length: > 0 }, l.Versao, l.AtualizadoEm, l.AtualizadoPor?.Nome);
+
+    public async Task<LeiBaseDto> ObterAsync() => ToDto(await repo.ObterAsync());
+
+    public async Task<LeiBaseDto> AtualizarAsync(LeiBaseInput input, int atualizadoPorId)
+    {
+        var titulo = input.Titulo.Trim();
+        var conteudo = input.Conteudo.Trim();
+        if (string.IsNullOrWhiteSpace(titulo)) throw new RegraNegocioException("O título da Lei Base é obrigatório.");
+        if (string.IsNullOrWhiteSpace(conteudo)) throw new RegraNegocioException("O conteúdo da Lei Base é obrigatório.");
+
+        var lei = await repo.ObterAsync();
+        lei.Titulo = titulo;
+        lei.Tipo = "Texto";
+        lei.Conteudo = conteudo;
+        lei.ArquivoNome = null;
+        lei.ArquivoBytes = null;
+        lei.Versao += 1;
+        lei.AtualizadoEm = DateTime.Now;
+        lei.AtualizadoPorId = atualizadoPorId;
+        await repo.SalvarAsync();
+
+        return ToDto(await repo.ObterAsync());
+    }
+
+    public async Task<LeiBaseDto> AtualizarPdfAsync(string titulo, string arquivoNome, byte[] bytes, int atualizadoPorId)
+    {
+        var t = titulo.Trim();
+        if (string.IsNullOrWhiteSpace(t)) throw new RegraNegocioException("O título da Lei Base é obrigatório.");
+        if (bytes.Length == 0) throw new RegraNegocioException("O arquivo PDF está vazio.");
+        if (bytes.Length > 10 * 1024 * 1024) throw new RegraNegocioException("O PDF deve ter no máximo 10 MB.");
+        if (bytes.Length < 4 || bytes[0] != 0x25 || bytes[1] != 0x50 || bytes[2] != 0x44 || bytes[3] != 0x46)
+            throw new RegraNegocioException("Arquivo inválido. Envie um PDF válido.");
+
+        var lei = await repo.ObterAsync();
+        lei.Titulo = t;
+        lei.Tipo = "Pdf";
+        lei.Conteudo = "";
+        lei.ArquivoNome = Path.GetFileName(arquivoNome);
+        lei.ArquivoBytes = bytes;
+        lei.Versao += 1;
+        lei.AtualizadoEm = DateTime.Now;
+        lei.AtualizadoPorId = atualizadoPorId;
+        await repo.SalvarAsync();
+
+        return ToDto(await repo.ObterAsync());
+    }
+
+    public async Task<(byte[] Bytes, string Nome)> ObterPdfAsync()
+    {
+        var lei = await repo.ObterAsync();
+        if (lei.Tipo != "Pdf" || lei.ArquivoBytes is null || lei.ArquivoBytes.Length == 0)
+            throw new NaoEncontradoException("Nenhum PDF cadastrado para a Lei Base.");
+        return (lei.ArquivoBytes, lei.ArquivoNome ?? "lei-base.pdf");
     }
 }

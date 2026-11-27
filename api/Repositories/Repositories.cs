@@ -75,6 +75,12 @@ public interface IGrupoPagamentoRepository
     Task SalvarAsync();
 }
 
+public interface ILeiBaseRepository
+{
+    Task<LeiBase> ObterAsync();
+    Task SalvarAsync();
+}
+
 public class MotivoRepository(AppDbContext db) : IMotivoRepository
 {
     public Task<List<Motivo>> ListarAsync() => db.Motivos.OrderBy(m => m.Descricao).ToListAsync();
@@ -254,5 +260,22 @@ public class GrupoPagamentoRepository(AppDbContext db) : IGrupoPagamentoReposito
 
     public async Task AdicionarAsync(GrupoPagamento g) => await db.GruposPagamento.AddAsync(g);
     public void RemoverParticipacao(GrupoPagamentoParticipacao p) => db.GrupoPagamentoParticipacoes.Remove(p);
+    public Task SalvarAsync() => db.SaveChangesAsync();
+}
+
+public class LeiBaseRepository(AppDbContext db) : ILeiBaseRepository
+{
+    public async Task<LeiBase> ObterAsync()
+    {
+        var lei = await db.LeisBase.Include(l => l.AtualizadoPor).FirstOrDefaultAsync(l => l.Id == 1);
+        if (lei is null)
+        {
+            lei = new LeiBase { Id = 1, Titulo = "Lei Base dos Salgados", Conteudo = "", Versao = 0 };
+            await db.LeisBase.AddAsync(lei);
+            await db.SaveChangesAsync();
+        }
+        return lei;
+    }
+
     public Task SalvarAsync() => db.SaveChangesAsync();
 }

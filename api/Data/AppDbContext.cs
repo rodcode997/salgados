@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<GrupoPagamento> GruposPagamento => Set<GrupoPagamento>();
     public DbSet<GrupoPagamentoParticipacao> GrupoPagamentoParticipacoes => Set<GrupoPagamentoParticipacao>();
     public DbSet<GrupoPagamentoDivida> GrupoPagamentoDividas => Set<GrupoPagamentoDivida>();
+    public DbSet<LeiBase> LeisBase => Set<LeiBase>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -171,6 +172,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasKey(x => new { x.GrupoPagamentoParticipacaoId, x.DividaId });
             e.HasOne(x => x.Participacao).WithMany(p => p.Dividas).HasForeignKey(x => x.GrupoPagamentoParticipacaoId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Divida).WithMany().HasForeignKey(x => x.DividaId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<LeiBase>(e =>
+        {
+            e.HasKey(l => l.Id);
+            e.Property(l => l.Titulo).HasMaxLength(200).IsRequired();
+            e.Property(l => l.Tipo).HasMaxLength(20).IsRequired();
+            e.Property(l => l.Conteudo).IsRequired();
+            e.Property(l => l.ArquivoNome).HasMaxLength(255);
+            e.HasOne(l => l.AtualizadoPor).WithMany().HasForeignKey(l => l.AtualizadoPorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasData(new LeiBase { Id = 1, Titulo = "Lei Base dos Salgados", Tipo = "Texto", Conteudo = "", Versao = 0 });
         });
     }
 }

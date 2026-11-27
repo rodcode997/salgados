@@ -157,6 +157,8 @@ public class Usuario
     public DateTime? DataNascimento { get; set; }
     public string? Avatar { get; set; }
     public bool DeveAlterarSenha { get; set; } = true;
+    public int VersaoLeiAceita { get; set; } = 0;
+    public DateTime? LeiAceitaEm { get; set; }
     public bool Ativo { get; set; } = true;
     public DateTime CriadoEm { get; set; } = DateTime.Now;
     public int PerfilId { get; set; }
@@ -223,4 +225,18 @@ public class GrupoPagamentoDivida
     public GrupoPagamentoParticipacao? Participacao { get; set; }
     public int DividaId { get; set; }
     public Divida? Divida { get; set; }
+}
+
+public class LeiBase
+{
+    public int Id { get; set; } = 1;
+    public string Titulo { get; set; } = "Lei Base dos Salgados";
+    public string Tipo { get; set; } = "Texto"; // "Texto" ou "Pdf"
+    public string Conteudo { get; set; } = string.Empty;
+    public string? ArquivoNome { get; set; }
+    public byte[]? ArquivoBytes { get; set; }
+    public int Versao { get; set; } = 0;
+    public DateTime? AtualizadoEm { get; set; }
+    public int? AtualizadoPorId { get; set; }
+    public Usuario? AtualizadoPor { get; set; }
 }

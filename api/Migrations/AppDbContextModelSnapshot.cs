@@ -238,6 +238,61 @@ namespace Salgados.Api.Migrations
                     b.ToTable("GrupoPagamentoParticipacoes");
                 });
 
+            modelBuilder.Entity("Salgados.Api.Entities.LeiBase", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<byte[]>("ArquivoBytes")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ArquivoNome")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTime?>("AtualizadoEm")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AtualizadoPorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Conteudo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Versao")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtualizadoPorId");
+
+                    b.ToTable("LeisBase");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Conteudo = "",
+                            Tipo = "Texto",
+                            Titulo = "Lei Base dos Salgados",
+                            Versao = 0
+                        });
+                });
+
             modelBuilder.Entity("Salgados.Api.Entities.Motivo", b =>
                 {
                     b.Property<int>("Id")
@@ -642,6 +697,9 @@ namespace Salgados.Api.Migrations
                     b.Property<bool>("DeveAlterarSenha")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("LeiAceitaEm")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Login")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -658,6 +716,9 @@ namespace Salgados.Api.Migrations
                     b.Property<string>("SenhaHash")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("VersaoLeiAceita")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -777,6 +838,16 @@ namespace Salgados.Api.Migrations
                     b.Navigation("GrupoPagamento");
 
                     b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("Salgados.Api.Entities.LeiBase", b =>
+                {
+                    b.HasOne("Salgados.Api.Entities.Usuario", "AtualizadoPor")
+                        .WithMany()
+                        .HasForeignKey("AtualizadoPorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AtualizadoPor");
                 });
 
             modelBuilder.Entity("Salgados.Api.Entities.Pagamento", b =>

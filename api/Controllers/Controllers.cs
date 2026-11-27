@@ -32,10 +32,20 @@ public class AuthController(IAuthService service) : ControllerBase
     public Task<UsuarioSessaoDto> AlterarAvatar(AlterarAvatarInput input) =>
         service.AlterarAvatarAsync(ObterUsuarioId(), input);
 
+    [HttpPut("perfil")]
+    [Authorize]
+    public Task<UsuarioSessaoDto> AlterarPerfil(AlterarPerfilInput input) =>
+        service.AlterarPerfilAsync(ObterUsuarioId(), input);
+
     [HttpPost("primeiro-acesso")]
     [Authorize]
     public Task<UsuarioSessaoDto> PrimeiroAcesso(PrimeiroAcessoInput input) =>
         service.ConcluirPrimeiroAcessoAsync(ObterUsuarioId(), input);
+
+    [HttpPost("aceitar-lei")]
+    [Authorize]
+    public Task<UsuarioSessaoDto> AceitarLei() =>
+        service.AceitarLeiAsync(ObterUsuarioId());
 
     private int ObterUsuarioId() =>
         int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new NaoAutorizadoException("Token inválido."));
@@ -240,5 +250,41 @@ public class GruposPagamentoController(IGrupoPagamentoService service) : Control
         var podeGerenciar = User.HasClaim("perm", PermissoesCodigos.DividasQuitar);
         await service.CancelarAsync(id, ObterUsuarioId(), podeGerenciar);
         return NoContent();
+    }
+}
+
+[ApiController]
+[Route("api/lei-base")]
+[Authorize]
+public class LeiBaseController(ILeiBaseService service) : ControllerBase
+{
+    private int ObterUsuarioId() =>
+        int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new NaoAutorizadoException("Token inválido."));
+
+    [HttpGet]
+    public Task<LeiBaseDto> Obter() => service.ObterAsync();
+
+    [HttpPut]
+    [Authorize(Policy = PermissoesCodigos.PerfisGerenciar)]
+    public Task<LeiBaseDto> Atualizar(LeiBaseInput input) => service.AtualizarAsync(input, ObterUsuarioId());
+
+    [HttpPost("pdf")]
+    [Authorize(Policy = PermissoesCodigos.PerfisGerenciar)]
+    [RequestSizeLimit(10_485_760)]
+    public async Task<LeiBaseDto> AtualizarPdf([FromForm] string titulo, [FromForm] IFormFile arquivo)
+    {
+        if (arquivo is null || arquivo.Length == 0)
+            throw new RegraNegocioException("Selecione um arquivo PDF.");
+        using var ms = new MemoryStream();
+        await arquivo.CopyToAsync(ms);
+        return await service.AtualizarPdfAsync(titulo, arquivo.FileName, ms.ToArray(), ObterUsuarioId());
+    }
+
+    [HttpGet("pdf")]
+    public async Task<IActionResult> BaixarPdf()
+    {
+        var (bytes, nome) = await service.ObterPdfAsync();
+        Response.Headers.ContentDisposition = $"inline; filename=\"{nome}\"";
+        return File(bytes, "application/pdf");
     }
 }

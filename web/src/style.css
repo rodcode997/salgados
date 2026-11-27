@@ -486,7 +486,8 @@ form.linha label {
   min-width: 220px;
 }
 
-form.coluna {
+form.coluna,
+.coluna {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -869,6 +870,24 @@ td .sub {
   gap: 14px;
 }
 
+.rank-item.clicavel {
+  cursor: pointer;
+  padding: 8px 10px;
+  margin: -8px -10px;
+  border-radius: 16px;
+  transition: background .15s, transform .15s;
+}
+
+.rank-item.clicavel:hover {
+  background: rgba(255, 255, 255, .55);
+  transform: translateX(3px);
+}
+
+.rank-seta {
+  color: var(--txt-2);
+  opacity: .75;
+}
+
 .rank-item .pos {
   width: 20px;
   font-family: 'Fredoka';
@@ -1015,6 +1034,45 @@ td .sub {
 .login-tela { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--creme); position: relative; overflow: hidden; }
 .login-card { background: #fff; border-radius: 28px; padding: 36px 32px; width: 100%; max-width: 420px; box-shadow: 0 20px 50px rgba(122, 65, 40, .16); position: relative; z-index: 1; }
 .login-card.primeiro-acesso { max-width: 560px; }
+.login-card.lei-card { max-width: 680px; }
+.lei-texto-box {
+  background: #fffaf2;
+  border: 2px solid var(--borda);
+  border-radius: 16px;
+  padding: 18px 20px;
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 14px;
+  color: var(--txt);
+}
+.lei-texto-box.grande { max-height: 65vh; font-size: 15px; }
+.lei-check { background: #fffaf2; border: 1.5px solid var(--borda); border-radius: 14px; padding: 12px 14px; }
+
+.lei-toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+.lei-fmt h2 { margin: 14px 0 6px; font-size: 20px; color: var(--choco); }
+.lei-fmt h3 { margin: 12px 0 4px; font-size: 17px; color: var(--txt); }
+.lei-fmt h4 { margin: 10px 0 4px; font-size: 15px; color: var(--txt-2); }
+.lei-fmt h2:first-child, .lei-fmt h3:first-child, .lei-fmt p:first-child { margin-top: 0; }
+.lei-fmt p { margin: 0 0 10px; }
+.lei-fmt ul, .lei-fmt ol { margin: 0 0 10px; padding-left: 22px; }
+.lei-fmt li { margin-bottom: 4px; }
+.lei-fmt hr { border: 0; border-top: 1.5px solid var(--borda); margin: 14px 0; }
+
+.lei-pdf-wrap { display: flex; flex-direction: column; gap: 10px; }
+.lei-pdf-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: #fffaf2; border: 1.5px solid var(--borda); border-radius: 14px; padding: 10px 14px; font-size: 14px; }
+.lei-pdf-bar span { display: inline-flex; align-items: center; gap: 6px; }
+.lei-pdf-link { display: inline-flex; align-items: center; gap: 6px; color: var(--laranja); font-family: 'Fredoka'; font-size: 14px; text-decoration: none; font-weight: 500; }
+.lei-pdf-link:hover { text-decoration: underline; }
+.lei-pdf-frame { width: 100%; height: 380px; border: 2px solid var(--borda); border-radius: 16px; background: #fff; }
+.lei-pdf-frame.grande { height: 68vh; }
+
+.lei-upload { border: 2px dashed var(--borda); border-radius: 18px; background: #fffaf2; padding: 28px 18px; align-items: center; text-align: center; cursor: pointer; gap: 6px; transition: .15s; }
+.lei-upload:hover { border-color: var(--laranja); background: #fff6e8; }
+.lei-upload input { display: none; }
+.lei-upload b { font-size: 15px; color: var(--txt); }
+.lei-upload small { font-size: 12px; color: var(--txt-2); }
 .login-topo { text-align: center; margin-bottom: 24px; }
 .login-topo h1 { margin: 8px 0 4px; font-size: 28px; }
 .login-topo p { margin: 0; color: var(--txt-2); font-size: 14px; }

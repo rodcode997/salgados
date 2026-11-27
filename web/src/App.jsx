@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Search, X, CheckCircle2, AlertCircle, ChevronRight, LogOut, KeyRound,
-  Pencil, Shield, Eye, EyeOff, LayoutDashboard, ReceiptText, Users, Tag, ShieldCheck, Menu, Settings, ShoppingBag
+  Pencil, Shield, Eye, EyeOff, LayoutDashboard, ReceiptText, Users, Tag, ShieldCheck, Menu, Settings, ShoppingBag, ScrollText
 } from 'lucide-react'
 import { api, getToken, setToken, setOnUnauthorized } from './api'
 import { Avatar, EditorAvatar, avatarPadrao, parseAvatar, serializeAvatar } from './avatar'
 import { GrupoFlutuante } from './GrupoFlutuante'
+import { VisualizadorLei, EditorLeiBase } from './LeiBase'
 
 const hoje = () => new Date().toISOString().slice(0, 10)
 const fmtData = (d) => (d ? new Date(d).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—')
@@ -142,6 +143,7 @@ export default function App() {
   const [modalAvatar, setModalAvatar] = useState(false)
   const [menuAberto, setMenuAberto] = useState(false)
   const [versaoAvatar, setVersaoAvatar] = useState(0)
+  const [tituloLei, setTituloLei] = useState('Lei Base')
   const [toast, setToast] = useState(null)
 
   const avisar = (msg, tipo = 'sucesso') => {
@@ -186,10 +188,16 @@ export default function App() {
     if (tem(PERM.USUARIOS_VER)) lista.push(['usuarios', 'Usuários', Users])
     lista.push(['produtos', 'Produtos', ShoppingBag])
     if (tem(PERM.MOTIVOS_VER)) lista.push(['motivos', 'Motivos', Tag])
+    lista.push(['lei', tituloLei, ScrollText])
     if (tem(PERM.PERFIS_GERENCIAR)) lista.push(['perfis', 'Perfis', ShieldCheck])
     if (tem(PERM.PERFIS_GERENCIAR)) lista.push(['configuracoes', 'Configurações', Settings])
     return lista
-  }, [usuario])
+  }, [usuario, tituloLei])
+
+  useEffect(() => {
+    if (!usuario) return
+    api.leiBase().then((l) => l?.titulo && setTituloLei(l.titulo)).catch(() => {})
+  }, [usuario?.id])
 
   useEffect(() => {
     if (abas.length && !abas.some(([k]) => k === pag)) setPag(abas[0][0])
@@ -216,6 +224,20 @@ export default function App() {
           exec={exec}
           avisar={avisar}
           onConcluido={(atualizado) => setUsuario(atualizado)}
+          onSair={sair}
+        />
+        {toast && <div className={'toast ' + toast.tipo}>{toast.tipo === 'erro' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}{toast.msg}</div>}
+      </>
+    )
+  }
+
+  if (usuario.deveAceitarLei) {
+    return (
+      <>
+        <TelaAceiteLei
+          usuario={usuario}
+          exec={exec}
+          onAceito={(atualizado) => setUsuario(atualizado)}
           onSair={sair}
         />
         {toast && <div className={'toast ' + toast.tipo}>{toast.tipo === 'erro' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}{toast.msg}</div>}
@@ -270,8 +292,8 @@ export default function App() {
             </div>
           </div>
           <div className="sidebar-user-acoes">
-            <button type="button" className="sec peq" title="Personalizar avatar" onClick={() => { setModalAvatar(true); setMenuAberto(false) }}>
-              Avatar
+            <button type="button" className="sec peq" title="Editar meu perfil e avatar" onClick={() => { setModalAvatar(true); setMenuAberto(false) }}>
+              Meu perfil
             </button>
             <button type="button" className="icone" title="Alterar senha" onClick={() => { setModalSenha(true); setMenuAberto(false) }}>
               <KeyRound size={17} />
@@ -308,6 +330,7 @@ export default function App() {
           )}
           {pag === 'produtos' && <Produtos exec={exec} tem={tem} />}
           {pag === 'motivos' && <Motivos exec={exec} tem={tem} />}
+          {pag === 'lei' && <PaginaLeiBase exec={exec} tem={tem} onTituloChange={setTituloLei} />}
           {pag === 'perfis' && <Perfis exec={exec} />}
           {pag === 'configuracoes' && <Configuracoes exec={exec} />}
           {!abas.length && <div className="card"><Vazio texto="Seu perfil não possui permissões de visualização." emo="🔒" /></div>}
@@ -482,6 +505,66 @@ function TelaPrimeiroAcesso({ usuario, exec, avisar, onConcluido, onSair }) {
   )
 }
 
+function TelaAceiteLei({ usuario, exec, onAceito, onSair }) {
+  const [lei, setLei] = useState(null)
+  const [lido, setLido] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    exec(api.leiBase).then((r) => r && setLei(r))
+  }, [])
+
+  const nomeLei = lei?.titulo || 'Lei Base'
+
+  const aceitar = async () => {
+    setSalvando(true)
+    const atualizado = await exec(() => api.aceitarLei(), `${nomeLei} aceito! Bem-vindo(a)!`)
+    setSalvando(false)
+    if (atualizado?.id) onAceito(atualizado)
+  }
+
+  return (
+    <div className="login-tela">
+      {DECO.map(([e, l, t, r], i) => (
+        <span key={i} className="deco" style={{ left: l, top: t, transform: `rotate(${r}deg)` }}>{e}</span>
+      ))}
+      <div className="login-card lei-card">
+        <div className="login-topo">
+          <Coxinha size={64} />
+          <h1>📜 {nomeLei}</h1>
+          <p>
+            Olá, <b>{usuario.nome}</b>! O termo <b>{nomeLei}</b> foi atualizado
+            {lei?.versao ? ` (versão ${lei.versao})` : ''}. Leia e aceite para continuar.
+          </p>
+        </div>
+
+        {!lei ? (
+          <Vazio texto={`Carregando ${nomeLei}...`} emo="📜" />
+        ) : (
+          <div className="coluna">
+            <VisualizadorLei lei={lei} />
+            {lei.atualizadoEm && (
+              <small style={{ color: 'var(--txt-2)', textAlign: 'right' }}>
+                Atualizada em {fmtDataHora(lei.atualizadoEm)}{lei.atualizadoPor ? ` por ${lei.atualizadoPor}` : ''}
+              </small>
+            )}
+            <label className="perm-check lei-check">
+              <input type="checkbox" checked={lido} onChange={(e) => setLido(e.target.checked)} />
+              <span>Li e concordo com os termos de <b>{nomeLei}</b> (v{lei.versao})</span>
+            </label>
+            <button className="grande ok" style={{ justifyContent: 'center' }} disabled={!lido || salvando} onClick={aceitar}>
+              <CheckCircle2 size={18} />{salvando ? 'Confirmando...' : 'Aceitar e continuar'}
+            </button>
+            <button type="button" className="sec" style={{ justifyContent: 'center' }} onClick={onSair}>
+              <LogOut size={16} />Sair
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ModalAlterarSenha({ exec, onClose }) {
   const [senhaAtual, setSenhaAtual] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
@@ -502,23 +585,33 @@ function ModalAlterarSenha({ exec, onClose }) {
 
 function ModalAlterarAvatar({ usuario, exec, onSaved, onClose }) {
   const [avatar, setAvatar] = useState(() => parseAvatar(usuario.avatar) || avatarPadrao('M'))
+  const [dataNascimento, setDataNascimento] = useState(usuario.dataNascimento ? usuario.dataNascimento.slice(0, 10) : '')
   const salvar = async (e) => {
     e.preventDefault()
-    const atualizado = await exec(() => api.alterarAvatar(serializeAvatar(avatar)), 'Avatar atualizado!')
+    const atualizado = await exec(
+      () => api.alterarPerfil({ avatar: serializeAvatar(avatar), dataNascimento }),
+      'Perfil atualizado!'
+    )
     if (atualizado?.id) onSaved(atualizado)
   }
   return (
-    <Modal peq titulo="Meu avatar 🎨" onClose={onClose}
+    <Modal peq titulo="Meu perfil ✨" onClose={onClose}
       rodape={<><button className="sec" onClick={onClose}>Cancelar</button><button form="f-avatar">Salvar</button></>}>
-      <form id="f-avatar" onSubmit={salvar}>
+      <form id="f-avatar" className="coluna" onSubmit={salvar}>
         <EditorAvatar nome={usuario.nome} value={avatar} onChange={setAvatar} />
+        <label>
+          Data de nascimento
+          <input type="date" value={dataNascimento} max={hoje()} onChange={(e) => setDataNascimento(e.target.value)} required />
+        </label>
       </form>
     </Modal>
   )
 }
 
 function Kpis({ dividas, usuarios }) {
-  const abertas = dividas.filter((d) => d.status === 'Aceita').length
+  const abertas = dividas.filter((d) => d.status === 'Aceita')
+  const salgadosAbertos = abertas.filter((d) => d.tipo === 'CentoSalgado').length
+  const chocolatesAbertos = abertas.filter((d) => d.tipo === 'CaixaChocolate').length
   const quitadas = dividas.filter((d) => d.status === 'Quitada')
   const salgadosPagos = quitadas.filter((d) => d.tipo === 'CentoSalgado').length
   const chocolatesPagos = quitadas.filter((d) => d.tipo === 'CaixaChocolate').length
@@ -526,7 +619,15 @@ function Kpis({ dividas, usuarios }) {
   const ativos = usuarios.filter((u) => u.ativo)
   const limpos = ativos.filter((u) => u.dividasAbertas === 0).length
   const itens = [
-    ['Dívidas em aberto', abertas, '🥟', 'k-laranja'],
+    [
+      'Em aberto (salgados / chocolates)',
+      <span className="kpi-duplo">
+        <span title="Centos de salgados em aberto">🥟 {salgadosAbertos}</span>
+        <span title="Caixas de chocolate em aberto">🍫 {chocolatesAbertos}</span>
+      </span>,
+      '🔥',
+      'k-laranja'
+    ],
     [
       'Pagos (salgados / chocolates)',
       <span className="kpi-duplo">
@@ -572,12 +673,21 @@ function Painel({ exec, irPara, usuarioLogado, tem }) {
     const m = {}
     dividas.filter((d) => d.status === 'Aceita')
       .forEach((d) => {
-        if (!m[d.usuario]) m[d.usuario] = { qtd: 0, avatar: d.usuarioAvatar }
-        m[d.usuario].qtd += 1
+        if (!m[d.usuarioId]) m[d.usuarioId] = { id: d.usuarioId, nome: d.usuario, qtd: 0, salgados: 0, chocolates: 0, avatar: d.usuarioAvatar }
+        m[d.usuarioId].qtd += 1
+        if (d.tipo === 'CentoSalgado') m[d.usuarioId].salgados += 1
+        if (d.tipo === 'CaixaChocolate') m[d.usuarioId].chocolates += 1
       })
-    return Object.entries(m).sort((a, b) => b[1].qtd - a[1].qtd).slice(0, 5)
+    const ordenados = Object.values(m)
+      .sort((a, b) => b.qtd - a.qtd || a.nome.localeCompare(b.nome, 'pt-BR'))
+      .slice(0, 5)
+    let pos = 0
+    return ordenados.map((item, i) => {
+      if (i === 0 || item.qtd < ordenados[i - 1].qtd) pos += 1
+      return { ...item, pos }
+    })
   }, [dividas])
-  const max = ranking[0]?.[1]?.qtd || 1
+  const max = ranking[0]?.qtd || 1
 
   const atualizarDetalhe = (nova) => {
     setDetalhe(nova)
@@ -621,17 +731,36 @@ function Painel({ exec, irPara, usuarioLogado, tem }) {
             : <Vazio texto="Nenhuma dívida ainda. Que equipe exemplar!" emo="🎉" />}
         </div>
         <div className="card amarelo">
-          <div className="card-cab"><h3>Maiores devedores</h3></div>
+          <div className="card-cab">
+            <div>
+              <h3>Maiores devedores</h3>
+              <p>Clique em uma pessoa para ver suas dívidas</p>
+            </div>
+          </div>
           {ranking.length ? (
             <div className="rank">
-              {ranking.map(([nome, info], i) => (
-                <div className="rank-item" key={nome}>
-                  <div className="pos">{i + 1}</div>
-                  <Avatar nome={nome} avatar={info.avatar} />
+              {ranking.map((info) => (
+                <div
+                  className="rank-item clicavel"
+                  key={info.id}
+                  title={`Ver dívidas de ${info.nome}`}
+                  onClick={() => setPessoaSel(info.id)}
+                >
+                  <div className="pos">{info.pos}º</div>
+                  <Avatar nome={info.nome} avatar={info.avatar} />
                   <div className="info">
-                    <div className="linha"><b>{nome}</b><small>{info.qtd} dívida{info.qtd > 1 ? 's' : ''}</small></div>
+                    <div className="linha">
+                      <b>{info.nome}</b>
+                      <small>
+                        {[
+                          info.salgados > 0 && `🥟 ${info.salgados}`,
+                          info.chocolates > 0 && `🍫 ${info.chocolates}`
+                        ].filter(Boolean).join(' · ')}
+                      </small>
+                    </div>
                     <div className="progresso"><div style={{ width: `${(info.qtd / max) * 100}%` }} /></div>
                   </div>
+                  <ChevronRight size={18} className="rank-seta" />
                 </div>
               ))}
             </div>
@@ -1580,5 +1709,58 @@ function Produtos({ exec, tem }) {
         </Modal>
       )}
     </>
+  )
+}
+
+function PaginaLeiBase({ exec, tem, onTituloChange }) {
+  const [lei, setLei] = useState(null)
+  const [editando, setEditando] = useState(false)
+  const podeEditar = tem(PERM.PERFIS_GERENCIAR)
+
+  const carregar = () => exec(api.leiBase).then((r) => {
+    if (r) {
+      setLei(r)
+      if (r.titulo && onTituloChange) onTituloChange(r.titulo)
+    }
+  })
+  useEffect(() => { carregar() }, [])
+
+  const temConteudo = lei && lei.versao > 0 && (lei.tipo === 'Pdf' ? lei.temPdf : !!lei.conteudo)
+
+  return (
+    <div className="card">
+      <div className="card-cab">
+        <div>
+          <h3>📜 {lei?.titulo || 'Lei Base'}</h3>
+          <p>
+            {lei?.versao > 0
+              ? `Versão ${lei.versao} · ${lei.tipo === 'Pdf' ? 'PDF' : 'Texto formatado'}${lei.atualizadoEm ? ` · Atualizada em ${fmtDataHora(lei.atualizadoEm)}` : ''}${lei.atualizadoPor ? ` por ${lei.atualizadoPor}` : ''}`
+              : 'Nenhum termo publicado ainda'}
+          </p>
+        </div>
+        {podeEditar && !editando && (
+          <button onClick={() => setEditando(true)}>
+            <Pencil size={16} />{lei?.versao > 0 ? 'Editar e publicar nova versão' : 'Cadastrar termo'}
+          </button>
+        )}
+      </div>
+
+      <div className="card-corpo">
+        {!lei ? (
+          <Vazio texto="Carregando..." emo="📜" />
+        ) : editando ? (
+          <EditorLeiBase
+            lei={lei}
+            exec={exec}
+            onSalvo={(r) => { setLei(r); if (r.titulo && onTituloChange) onTituloChange(r.titulo); setEditando(false) }}
+            onCancelar={() => setEditando(false)}
+          />
+        ) : temConteudo ? (
+          <VisualizadorLei lei={lei} grande />
+        ) : (
+          <Vazio texto="Nenhum documento cadastrado ainda." emo="📜" />
+        )}
+      </div>
+    </div>
   )
 }

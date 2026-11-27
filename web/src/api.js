@@ -36,7 +36,9 @@ export const api = {
   me: () => req('/auth/me'),
   alterarSenha: (d) => req('/auth/alterar-senha', { method: 'POST', body: d }),
   alterarAvatar: (avatar) => req('/auth/avatar', { method: 'PUT', body: { avatar } }),
+  alterarPerfil: (d) => req('/auth/perfil', { method: 'PUT', body: d }),
   primeiroAcesso: (d) => req('/auth/primeiro-acesso', { method: 'POST', body: d }),
+  aceitarLei: () => req('/auth/aceitar-lei', { method: 'POST' }),
 
   // Usuários (cada usuário é uma pessoa da empresa)
   usuarios: () => req('/usuarios'),
@@ -84,5 +86,34 @@ export const api = {
   participarGrupo: (id, d) => req(`/grupos-pagamento/${id}/participar`, { method: 'POST', body: d }),
   sairGrupo: (id) => req(`/grupos-pagamento/${id}/participar`, { method: 'DELETE' }),
   fecharGrupo: (id) => req(`/grupos-pagamento/${id}/fechar`, { method: 'POST' }),
-  cancelarGrupo: (id) => req(`/grupos-pagamento/${id}/cancelar`, { method: 'POST' })
+  cancelarGrupo: (id) => req(`/grupos-pagamento/${id}/cancelar`, { method: 'POST' }),
+
+  // Lei Base (Termo de Uso)
+  leiBase: () => req('/lei-base'),
+  atualizarLeiBase: (d) => req('/lei-base', { method: 'PUT', body: d }),
+  enviarLeiPdf: async (titulo, arquivo) => {
+    const fd = new FormData()
+    fd.append('titulo', titulo)
+    fd.append('arquivo', arquivo)
+    const token = getToken()
+    const res = await fetch(BASE + '/lei-base/pdf', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd
+    })
+    if (!res.ok) {
+      let msg = `Erro ${res.status}`
+      try { const j = await res.json(); msg = j.erro || j.title || msg } catch { }
+      throw new Error(msg)
+    }
+    return res.json()
+  },
+  obterLeiPdfBlob: async () => {
+    const token = getToken()
+    const res = await fetch(BASE + '/lei-base/pdf', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+    if (!res.ok) throw new Error('Não foi possível carregar o PDF da Lei Base.')
+    return res.blob()
+  }
 }
