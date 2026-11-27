@@ -219,4 +219,50 @@ A aplicação estará acessível em `http://localhost:5173`.
 - **Login:** `admin`
 - **Senha:** `Admin@123`
 
-> **Dica:** Para gerar o build de produção do frontend, execute `npm run build` dentro da pasta `web/`. Em ambiente de produção, lembre-se de substituir a chave `Jwt:Key` em `api/appsettings.json` por uma variável de ambiente segura.
+---
+
+## 🏭 Deploy em Produção (SQL Server)
+
+Em ambiente de **Desenvolvimento** (`appsettings.Development.json`), a API usa **SQLite** automaticamente. Em **Produção**, o provider padrão é **SQL Server** (`Microsoft.EntityFrameworkCore.SqlServer` com retry automático).
+
+### 1. Configurar variáveis de ambiente ou `appsettings.Production.json`
+Copie `api/appsettings.Production.json.example` para `api/appsettings.Production.json` (ignorado pelo Git) ou configure via variáveis de ambiente:
+
+- `ASPNETCORE_ENVIRONMENT=Production`
+- `Database__Provider=SqlServer`
+- `ConnectionStrings__Default=Server=SEU_SERVIDOR;Database=SalgadosDb;User Id=USUARIO;Password=SENHA;Encrypt=True;TrustServerCertificate=True;`
+- `Jwt__Key=<chave aleatória segura com 32+ caracteres>`
+- `Cors__AllowedOrigins__0=https://salgados.suaempresa.com.br`
+- `SeedAdmin__SenhaInicial=<senha forte inicial do admin>`
+
+> **Banco de dados e Migrations:** o projeto usa **EF Core Migrations** para SQL Server (`api/Migrations/`). Basta criar o database vazio (`CREATE DATABASE SalgadosDb;`) que na inicialização a API aplica `db.Database.Migrate()` automaticamente (criando tabelas, `__EFMigrationsHistory` e dados iniciais). Caso prefira rodar manualmente no SSMS, o script idempotente gerado a partir das migrations está em `api/Sql/create-sqlserver.sql`.
+>
+> Para futuras alterações de banco:
+> ```bash
+> cd api
+> dotnet ef migrations add NomeDaAlteracao
+> ```
+
+### 2. Publicar Backend + Frontend (deploy unificado ou separado)
+
+**Opção A — Deploy unificado (1 único servidor .NET):**
+```bash
+# 1. Gera o frontend (usa /api automaticamente em produção)
+cd web
+npm ci
+npm run build
+
+# 2. Copia o build para wwwroot da API e publica em Release
+mkdir -p ../api/wwwroot
+cp -r dist/* ../api/wwwroot/
+cd ../api
+dotnet publish -c Release -o ./publish
+```
+
+**Opção B — Deploy separado (Frontend estático + API):**
+- No `web/`, defina `VITE_API_URL=https://api.salgados.suaempresa.com.br/api` (ver `web/.env.example`) e rode `npm run build`.
+- No `api/`, rode `dotnet publish -c Release -o ./publish` e configure `Cors__AllowedOrigins__0` com o domínio do frontend.
+
+### 3. Health Check
+- `GET /health` retorna `200 OK` (`{ "status": "ok" }`) para monitoramento e load balancers.
+
