@@ -215,7 +215,7 @@ export default function App() {
           usuario={usuario}
           exec={exec}
           avisar={avisar}
-          onConcluido={() => setUsuario((u) => (u ? { ...u, deveAlterarSenha: false } : u))}
+          onConcluido={(atualizado) => setUsuario(atualizado)}
           onSair={sair}
         />
         {toast && <div className={'toast ' + toast.tipo}>{toast.tipo === 'erro' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}{toast.msg}</div>}
@@ -397,9 +397,6 @@ function TelaLogin({ onLogin, avisar }) {
             {entrando ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
-        <div className="login-dica">
-          Admin padrão: <code>admin</code> / <code>Admin@123</code>
-        </div>
       </div>
 
       {esqueceu && (
@@ -420,6 +417,8 @@ function TelaLogin({ onLogin, avisar }) {
 }
 
 function TelaPrimeiroAcesso({ usuario, exec, avisar, onConcluido, onSair }) {
+  const [avatar, setAvatar] = useState(() => parseAvatar(usuario.avatar) || avatarPadrao('M'))
+  const [dataNascimento, setDataNascimento] = useState(usuario.dataNascimento ? usuario.dataNascimento.slice(0, 10) : '')
   const [senhaAtual, setSenhaAtual] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
   const [confirmacao, setConfirmacao] = useState('')
@@ -429,14 +428,26 @@ function TelaPrimeiroAcesso({ usuario, exec, avisar, onConcluido, onSair }) {
 
   const salvar = async (e) => {
     e.preventDefault()
+    if (!dataNascimento) {
+      avisar('Informe sua data de nascimento.', 'erro')
+      return
+    }
     if (novaSenha !== confirmacao) {
       avisar('A confirmação não confere com a nova senha.', 'erro')
       return
     }
     setSalvando(true)
-    const ok = await exec(() => api.alterarSenha({ senhaAtual, novaSenha }), 'Senha atualizada! Bem-vindo(a)!')
+    const atualizado = await exec(
+      () => api.primeiroAcesso({
+        senhaAtual,
+        novaSenha,
+        dataNascimento,
+        avatar: serializeAvatar(avatar)
+      }),
+      'Perfil configurado! Bem-vindo(a)!'
+    )
     setSalvando(false)
-    if (ok) onConcluido()
+    if (atualizado?.id) onConcluido(atualizado)
   }
 
   return (
@@ -444,18 +455,23 @@ function TelaPrimeiroAcesso({ usuario, exec, avisar, onConcluido, onSair }) {
       {DECO.map(([e, l, t, r], i) => (
         <span key={i} className="deco" style={{ left: l, top: t, transform: `rotate(${r}deg)` }}>{e}</span>
       ))}
-      <div className="login-card">
+      <div className="login-card primeiro-acesso">
         <div className="login-topo">
           <Coxinha size={76} tapandoOlhos={tapando} espiando={mostrar} />
           <h1>Primeiro acesso 🔐</h1>
-          <p>Olá, <b>{usuario.nome}</b>! Por segurança, defina sua nova senha para continuar.</p>
+          <p>Olá, <b>{usuario.nome}</b>! Personalize seu avatar, confirme sua data de nascimento e defina sua nova senha para entrar.</p>
         </div>
         <form className="coluna" onSubmit={salvar}>
-          <label>Senha provisória (atual)<InputSenha mostrar={mostrar} onToggleMostrar={() => setMostrar((v) => !v)} value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} onFocus={() => setTapando(true)} onBlur={() => setTapando(false)} required autoFocus /></label>
+          <EditorAvatar nome={usuario.nome} value={avatar} onChange={setAvatar} />
+          <label>
+            Data de nascimento
+            <input type="date" value={dataNascimento} max={hoje()} onChange={(e) => setDataNascimento(e.target.value)} required />
+          </label>
+          <label>Senha provisória (atual)<InputSenha mostrar={mostrar} onToggleMostrar={() => setMostrar((v) => !v)} value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} onFocus={() => setTapando(true)} onBlur={() => setTapando(false)} required /></label>
           <label>Nova senha (mín. 6 caracteres)<InputSenha mostrar={mostrar} onToggleMostrar={() => setMostrar((v) => !v)} minLength={6} value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} onFocus={() => setTapando(true)} onBlur={() => setTapando(false)} required /></label>
           <label>Confirmar nova senha<InputSenha mostrar={mostrar} onToggleMostrar={() => setMostrar((v) => !v)} minLength={6} value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} onFocus={() => setTapando(true)} onBlur={() => setTapando(false)} required /></label>
           <button className="grande" style={{ justifyContent: 'center', marginTop: 6 }} disabled={salvando}>
-            {salvando ? 'Salvando...' : 'Salvar nova senha e entrar'}
+            {salvando ? 'Salvando...' : 'Salvar e entrar'}
           </button>
           <button type="button" className="sec" style={{ justifyContent: 'center' }} onClick={onSair}>
             <LogOut size={16} />Sair

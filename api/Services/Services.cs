@@ -93,7 +93,7 @@ public static class Mapper
     }
 
     public static UsuarioSessaoDto ToSessaoDto(Usuario u) => new(
-        u.Id, u.Nome, u.Login, u.Avatar, u.DeveAlterarSenha, u.PerfilId, u.Perfil?.Nome ?? "",
+        u.Id, u.Nome, u.Login, u.DataNascimento, u.Avatar, u.DeveAlterarSenha, u.PerfilId, u.Perfil?.Nome ?? "",
         u.Perfil?.Permissoes.Where(pp => pp.Permissao != null).Select(pp => pp.Permissao!.Codigo).Distinct().ToList() ?? []);
 }
 
@@ -367,9 +367,14 @@ public interface IAuthService
     Task<UsuarioSessaoDto> ObterSessaoAsync(int usuarioId);
     Task AlterarSenhaAsync(int usuarioId, AlterarSenhaInput input);
     Task<UsuarioSessaoDto> AlterarAvatarAsync(int usuarioId, AlterarAvatarInput input);
+    Task<UsuarioSessaoDto> ConcluirPrimeiroAcessoAsync(int usuarioId, PrimeiroAcessoInput input);
 }
 
-public class AuthService(IUsuarioRepository usuarios, IPasswordHasher<Usuario> hasher, IConfiguration config) : IAuthService
+public class AuthService(
+    IUsuarioRepository usuarios,
+    IPasswordHasher<Usuario> hasher,
+    IConfiguration config,
+    IAniversarioService aniversarios) : IAuthService
 {
     public async Task<LoginDto> LoginAsync(LoginInput input)
     {
@@ -439,6 +444,29 @@ public class AuthService(IUsuarioRepository usuarios, IPasswordHasher<Usuario> h
         var u = await usuarios.ObterAsync(usuarioId) ?? throw new NaoEncontradoException("Usuário não encontrado.");
         u.Avatar = string.IsNullOrWhiteSpace(input.Avatar) ? null : input.Avatar.Trim();
         await usuarios.SalvarAsync();
+        return Mapper.ToSessaoDto(u);
+    }
+
+    public async Task<UsuarioSessaoDto> ConcluirPrimeiroAcessoAsync(int usuarioId, PrimeiroAcessoInput input)
+    {
+        var u = await usuarios.ObterAsync(usuarioId) ?? throw new NaoEncontradoException("Usuário não encontrado.");
+        var verif = hasher.VerifyHashedPassword(u, u.SenhaHash, input.SenhaAtual);
+        if (verif == PasswordVerificationResult.Failed)
+            throw new RegraNegocioException("Senha atual incorreta.");
+        if (input.NovaSenha == input.SenhaAtual)
+            throw new RegraNegocioException("A nova senha deve ser diferente da senha atual.");
+        if (input.DataNascimento.Date > DateTime.Today)
+            throw new RegraNegocioException("Data de nascimento não pode ser futura.");
+        if (string.IsNullOrWhiteSpace(input.Avatar))
+            throw new RegraNegocioException("Personalize seu avatar para continuar.");
+
+        u.SenhaHash = hasher.HashPassword(u, input.NovaSenha);
+        u.DataNascimento = input.DataNascimento.Date;
+        u.Avatar = input.Avatar.Trim();
+        u.DeveAlterarSenha = false;
+        await usuarios.SalvarAsync();
+
+        await aniversarios.ProcessarUsuarioAsync(u.Id);
         return Mapper.ToSessaoDto(u);
     }
 }

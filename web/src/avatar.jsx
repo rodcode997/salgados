@@ -139,6 +139,8 @@ export function sortearAvatar(genero = 'M') {
   }
 }
 
+export const TODOS_CABELOS = [...CABELOS_POR_GENERO.F, ...CABELOS_POR_GENERO.M]
+
 export function buildAvatarUrl(nome, avatar) {
   const params = new URLSearchParams()
   const cfg = parseAvatar(avatar)
@@ -146,10 +148,9 @@ export function buildAvatarUrl(nome, avatar) {
   params.set('seed', cfg ? `v-${cfg.variacao ?? 1}` : (nome || 'u'))
   params.set('backgroundColor', BG_COLORS)
   if (cfg) {
-    const g = cfg.genero === 'F' ? 'F' : 'M'
-    const cabelosValidos = CABELOS_POR_GENERO[g].map((c) => c.id)
+    const cabelosValidos = TODOS_CABELOS.map((c) => c.id)
 
-    if (g === 'M' && cfg.cabelo === 'careca') {
+    if (cfg.cabelo === 'careca') {
       params.set('topProbability', '0')
     } else if (cfg.cabelo && cabelosValidos.includes(cfg.cabelo)) {
       params.set('top', cfg.cabelo)
@@ -165,7 +166,7 @@ export function buildAvatarUrl(nome, avatar) {
     }
     if (cfg.pele) params.set('skinColor', cfg.pele)
 
-    if (g === 'F' || !cfg.barba || cfg.barba === 'nenhuma') {
+    if (!cfg.barba || cfg.barba === 'nenhuma') {
       params.set('facialHairProbability', '0')
     } else {
       params.set('facialHair', cfg.barba)
@@ -196,7 +197,6 @@ export function Avatar({ nome, avatar, grande }) {
 
 export function EditorAvatar({ nome, value, onChange }) {
   const cfg = parseAvatar(value) || avatarPadrao('M')
-  const cabelos = CABELOS_POR_GENERO[cfg.genero] || CABELOS_POR_GENERO.M
 
   const atualizar = (patch) => onChange({ ...cfg, ...patch })
 
@@ -283,7 +283,12 @@ export function EditorAvatar({ nome, value, onChange }) {
         <label>
           Cabelo
           <select value={cfg.cabelo} onChange={(e) => atualizar({ cabelo: e.target.value })}>
-            {cabelos.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            <optgroup label="Longos e médios">
+              {CABELOS_POR_GENERO.F.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </optgroup>
+            <optgroup label="Curtos e outros">
+              {CABELOS_POR_GENERO.M.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </optgroup>
           </select>
         </label>
 
@@ -301,14 +306,12 @@ export function EditorAvatar({ nome, value, onChange }) {
           </select>
         </label>
 
-        {cfg.genero === 'M' && (
-          <label>
-            Barba
-            <select value={cfg.barba} onChange={(e) => atualizar({ barba: e.target.value })}>
-              {BARBAS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
-            </select>
-          </label>
-        )}
+        <label>
+          Barba
+          <select value={cfg.barba || 'nenhuma'} onChange={(e) => atualizar({ barba: e.target.value })}>
+            {BARBAS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+          </select>
+        </label>
       </div>
     </div>
   )

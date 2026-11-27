@@ -49,8 +49,13 @@ public record DividaDto(
 public record LoginInput([Required, MaxLength(100)] string Login, [Required] string Senha);
 public record AlterarSenhaInput([Required] string SenhaAtual, [Required, MinLength(6)] string NovaSenha);
 public record AlterarAvatarInput([MaxLength(500)] string? Avatar);
+public record PrimeiroAcessoInput(
+    [Required] string SenhaAtual,
+    [Required, MinLength(6)] string NovaSenha,
+    [Required] DateTime DataNascimento,
+    [Required, MaxLength(500)] string Avatar);
 
-public record UsuarioSessaoDto(int Id, string Nome, string Login, string? Avatar, bool DeveAlterarSenha, int PerfilId, string Perfil, List<string> Permissoes);
+public record UsuarioSessaoDto(int Id, string Nome, string Login, DateTime? DataNascimento, string? Avatar, bool DeveAlterarSenha, int PerfilId, string Perfil, List<string> Permissoes);
 public record LoginDto(string Token, DateTime ExpiraEm, UsuarioSessaoDto Usuario);
 
 public record PermissaoDto(int Id, string Codigo, string Descricao, string Modulo);

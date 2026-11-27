@@ -36,6 +36,7 @@ export const api = {
   me: () => req('/auth/me'),
   alterarSenha: (d) => req('/auth/alterar-senha', { method: 'POST', body: d }),
   alterarAvatar: (avatar) => req('/auth/avatar', { method: 'PUT', body: { avatar } }),
+  primeiroAcesso: (d) => req('/auth/primeiro-acesso', { method: 'POST', body: d }),
 
   // Usuários (cada usuário é uma pessoa da empresa)
   usuarios: () => req('/usuarios'),

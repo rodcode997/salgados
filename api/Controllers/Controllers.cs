@@ -32,6 +32,11 @@ public class AuthController(IAuthService service) : ControllerBase
     public Task<UsuarioSessaoDto> AlterarAvatar(AlterarAvatarInput input) =>
         service.AlterarAvatarAsync(ObterUsuarioId(), input);
 
+    [HttpPost("primeiro-acesso")]
+    [Authorize]
+    public Task<UsuarioSessaoDto> PrimeiroAcesso(PrimeiroAcessoInput input) =>
+        service.ConcluirPrimeiroAcessoAsync(ObterUsuarioId(), input);
+
     private int ObterUsuarioId() =>
         int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new NaoAutorizadoException("Token inválido."));
 }
