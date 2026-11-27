@@ -93,7 +93,7 @@ public static class Mapper
     }
 
     public static UsuarioSessaoDto ToSessaoDto(Usuario u) => new(
-        u.Id, u.Nome, u.Login, u.Avatar, u.PerfilId, u.Perfil?.Nome ?? "",
+        u.Id, u.Nome, u.Login, u.Avatar, u.DeveAlterarSenha, u.PerfilId, u.Perfil?.Nome ?? "",
         u.Perfil?.Permissoes.Where(pp => pp.Permissao != null).Select(pp => pp.Permissao!.Codigo).Distinct().ToList() ?? []);
 }
 
@@ -427,7 +427,10 @@ public class AuthService(IUsuarioRepository usuarios, IPasswordHasher<Usuario> h
         var verif = hasher.VerifyHashedPassword(u, u.SenhaHash, input.SenhaAtual);
         if (verif == PasswordVerificationResult.Failed)
             throw new RegraNegocioException("Senha atual incorreta.");
+        if (input.NovaSenha == input.SenhaAtual)
+            throw new RegraNegocioException("A nova senha deve ser diferente da senha atual.");
         u.SenhaHash = hasher.HashPassword(u, input.NovaSenha);
+        u.DeveAlterarSenha = false;
         await usuarios.SalvarAsync();
     }
 
@@ -560,7 +563,8 @@ public class UsuarioService(
             Login = login,
             DataNascimento = input.DataNascimento.Date,
             PerfilId = input.PerfilId,
-            Avatar = string.IsNullOrWhiteSpace(input.Avatar) ? null : input.Avatar.Trim()
+            Avatar = string.IsNullOrWhiteSpace(input.Avatar) ? null : input.Avatar.Trim(),
+            DeveAlterarSenha = true
         };
         u.SenhaHash = hasher.HashPassword(u, input.Senha);
         await repo.AdicionarAsync(u);
@@ -595,6 +599,7 @@ public class UsuarioService(
             if (input.NovaSenha.Length < 6)
                 throw new RegraNegocioException("A nova senha deve ter pelo menos 6 caracteres.");
             u.SenhaHash = hasher.HashPassword(u, input.NovaSenha);
+            u.DeveAlterarSenha = true;
         }
 
         await repo.SalvarAsync();
@@ -623,19 +628,22 @@ public class ConfiguracaoService(IConfiguracaoRepository repo) : IConfiguracaoSe
     public async Task<ConfiguracaoDto> ObterAsync()
     {
         var cfg = await repo.ObterAsync();
-        return new ConfiguracaoDto(cfg.ExigirAceiteDivida, cfg.TipoDividaAniversario);
+        return new ConfiguracaoDto(cfg.ExigirAceiteDivida, cfg.TipoDividaAniversario, cfg.ValorMinimoQuitacaoConjunta);
     }
 
     public async Task<ConfiguracaoDto> AtualizarAsync(ConfiguracaoInput input)
     {
         if (!Enum.IsDefined(input.TipoDividaAniversario))
             throw new RegraNegocioException("Tipo de dívida de aniversário inválido.");
+        if (input.ValorMinimoQuitacaoConjunta <= 0)
+            throw new RegraNegocioException("O valor mínimo de quitação em conjunto deve ser maior que zero.");
 
         var cfg = await repo.ObterAsync();
         cfg.ExigirAceiteDivida = input.ExigirAceiteDivida;
         cfg.TipoDividaAniversario = input.TipoDividaAniversario;
+        cfg.ValorMinimoQuitacaoConjunta = input.ValorMinimoQuitacaoConjunta;
         await repo.SalvarAsync();
-        return new ConfiguracaoDto(cfg.ExigirAceiteDivida, cfg.TipoDividaAniversario);
+        return new ConfiguracaoDto(cfg.ExigirAceiteDivida, cfg.TipoDividaAniversario, cfg.ValorMinimoQuitacaoConjunta);
     }
 }
 
@@ -767,5 +775,266 @@ public class AniversarioHostedService(IServiceScopeFactory scopeFactory, ILogger
         {
             logger.LogError(ex, "Erro ao processar dívidas automáticas de aniversário.");
         }
+    }
+}
+
+public interface IProdutoService
+{
+    Task<List<ProdutoDto>> ListarAsync();
+    Task<ProdutoDto> CriarAsync(ProdutoInput input);
+    Task<ProdutoDto> AtualizarAsync(int id, ProdutoInput input);
+    Task AlterarAtivoAsync(int id, bool ativo);
+}
+
+public class ProdutoService(IProdutoRepository repo) : IProdutoService
+{
+    private static ProdutoDto ToDto(Produto p) => new(p.Id, p.Nome, p.Valor, p.Ativo, p.CriadoEm);
+
+    public async Task<List<ProdutoDto>> ListarAsync() =>
+        (await repo.ListarAsync()).Select(ToDto).ToList();
+
+    public async Task<ProdutoDto> CriarAsync(ProdutoInput input)
+    {
+        var nome = input.Nome.Trim();
+        if (string.IsNullOrWhiteSpace(nome)) throw new RegraNegocioException("Nome do produto é obrigatório.");
+        if (input.Valor <= 0) throw new RegraNegocioException("O valor do produto deve ser maior que zero.");
+
+        var p = new Produto { Nome = nome, Valor = input.Valor };
+        await repo.AdicionarAsync(p);
+        await repo.SalvarAsync();
+        return ToDto(p);
+    }
+
+    public async Task<ProdutoDto> AtualizarAsync(int id, ProdutoInput input)
+    {
+        var p = await repo.ObterAsync(id) ?? throw new NaoEncontradoException("Produto não encontrado.");
+        var nome = input.Nome.Trim();
+        if (string.IsNullOrWhiteSpace(nome)) throw new RegraNegocioException("Nome do produto é obrigatório.");
+        if (input.Valor <= 0) throw new RegraNegocioException("O valor do produto deve ser maior que zero.");
+
+        p.Nome = nome;
+        p.Valor = input.Valor;
+        await repo.SalvarAsync();
+        return ToDto(p);
+    }
+
+    public async Task AlterarAtivoAsync(int id, bool ativo)
+    {
+        var p = await repo.ObterAsync(id) ?? throw new NaoEncontradoException("Produto não encontrado.");
+        p.Ativo = ativo;
+        await repo.SalvarAsync();
+    }
+}
+
+public interface IGrupoPagamentoService
+{
+    Task<List<GrupoPagamentoDto>> ListarAsync();
+    Task<GrupoPagamentoDto> CriarAsync(GrupoPagamentoCreateInput input, int criadoPorId);
+    Task<GrupoPagamentoDto> ParticiparAsync(int grupoId, GrupoParticiparInput input, int usuarioId);
+    Task<GrupoPagamentoDto> SairAsync(int grupoId, int usuarioId);
+    Task<GrupoPagamentoDto> FecharAsync(int grupoId, int usuarioId, bool podeGerenciar);
+    Task CancelarAsync(int grupoId, int usuarioId, bool podeGerenciar);
+}
+
+public class GrupoPagamentoService(
+    IGrupoPagamentoRepository repo,
+    IProdutoRepository produtos,
+    IDividaRepository dividas,
+    IConfiguracaoRepository configuracoes) : IGrupoPagamentoService
+{
+    private static (int TotalDividasMeta, decimal ValorPorDivida) CalcularRegraGrupo(GrupoPagamento g)
+    {
+        var totalDividas = g.ValorMinimoPorDivida > 0
+            ? Math.Max(1, (int)Math.Floor(g.ValorMeta / g.ValorMinimoPorDivida))
+            : 1;
+        var valorPorDivida = Math.Round(g.ValorMeta / totalDividas, 2);
+        return (totalDividas, valorPorDivida);
+    }
+
+    private static GrupoPagamentoDto ToDto(GrupoPagamento g)
+    {
+        var (totalDividasMeta, valorPorDivida) = CalcularRegraGrupo(g);
+        var selecionadas = g.Participacoes.Sum(p => p.Dividas.Count);
+        return new GrupoPagamentoDto(
+            g.Id, g.ProdutoId, g.Produto?.Nome ?? "",
+            g.ValorMeta, g.ValorMinimoPorDivida,
+            totalDividasMeta, selecionadas, valorPorDivida,
+            g.DataCompra,
+            g.Observacao, g.Status,
+            g.CriadoPorId, g.CriadoPor?.Nome ?? "", g.CriadoEm, g.FechadoEm,
+            g.Participacoes.OrderBy(p => p.CriadoEm).Select(p => new GrupoParticipacaoDto(
+                p.Id, p.UsuarioId, p.Usuario?.Nome ?? "", p.Usuario?.Avatar,
+                p.ValorContribuido, p.CriadoEm,
+                p.Dividas.Where(d => d.Divida != null).Select(d => new GrupoDividaResumoDto(
+                    d.Divida!.Id, d.Divida.Tipo, Mapper.Descricao(d.Divida.Tipo),
+                    d.Divida.Motivo?.Descricao ?? "", d.Divida.DataAquisicao
+                )).ToList()
+            )).ToList());
+    }
+
+    private static void FecharEQuitar(GrupoPagamento g, int usuarioId, decimal valorPorDivida)
+    {
+        var agora = DateTime.Now;
+        var hoje = DateTime.Today;
+        g.Status = StatusGrupoPagamento.Fechado;
+        g.FechadoEm = agora;
+
+        foreach (var part in g.Participacoes)
+        {
+            part.ValorContribuido = Math.Round(part.Dividas.Count * valorPorDivida, 2);
+            foreach (var gd in part.Dividas)
+            {
+                var d = gd.Divida;
+                if (d is null || d.Status != StatusDivida.Aceita) continue;
+                d.Status = StatusDivida.Quitada;
+                d.DataQuitacao = hoje;
+                d.ValorPago = valorPorDivida;
+                d.QuitadoPorId = usuarioId;
+                d.QuitadoEm = agora;
+                d.Pagamentos.Add(new Pagamento
+                {
+                    DividaId = d.Id,
+                    DataPagamento = hoje,
+                    ValorPago = valorPorDivida,
+                    Observacao = $"Pagamento em grupo #{g.Id}: {g.Produto?.Nome} (R$ {valorPorDivida:N2} por dívida)",
+                    Status = StatusPagamento.Aprovado,
+                    CriadoPorId = part.UsuarioId,
+                    CriadoEm = agora,
+                    AvaliadoPorId = usuarioId,
+                    AvaliadoEm = agora
+                });
+            }
+        }
+    }
+
+    public async Task<List<GrupoPagamentoDto>> ListarAsync() =>
+        (await repo.ListarAsync()).Select(ToDto).ToList();
+
+    public async Task<GrupoPagamentoDto> CriarAsync(GrupoPagamentoCreateInput input, int criadoPorId)
+    {
+        var produto = await produtos.ObterAsync(input.ProdutoId) ?? throw new RegraNegocioException("Produto inválido.");
+        if (!produto.Ativo) throw new RegraNegocioException("Este produto está inativo.");
+        if (input.DataCompra.Date < DateTime.Today)
+            throw new RegraNegocioException("A data da compra não pode ser anterior a hoje.");
+
+        var cfg = await configuracoes.ObterAsync();
+        if (produto.Valor < cfg.ValorMinimoQuitacaoConjunta)
+            throw new RegraNegocioException($"O valor do produto (R$ {produto.Valor:N2}) é menor que o mínimo configurado para quitação em conjunto (R$ {cfg.ValorMinimoQuitacaoConjunta:N2}).");
+
+        var g = new GrupoPagamento
+        {
+            ProdutoId = produto.Id,
+            ValorMeta = produto.Valor,
+            ValorMinimoPorDivida = cfg.ValorMinimoQuitacaoConjunta,
+            DataCompra = input.DataCompra.Date,
+            Observacao = string.IsNullOrWhiteSpace(input.Observacao) ? null : input.Observacao.Trim(),
+            Status = StatusGrupoPagamento.Aberto,
+            CriadoPorId = criadoPorId,
+            CriadoEm = DateTime.Now
+        };
+        await repo.AdicionarAsync(g);
+        await repo.SalvarAsync();
+        return ToDto((await repo.ObterAsync(g.Id))!);
+    }
+
+    public async Task<GrupoPagamentoDto> ParticiparAsync(int grupoId, GrupoParticiparInput input, int usuarioId)
+    {
+        var g = await repo.ObterAsync(grupoId) ?? throw new NaoEncontradoException("Grupo de pagamento não encontrado.");
+        if (g.Status != StatusGrupoPagamento.Aberto)
+            throw new RegraNegocioException("Este grupo de pagamento já foi encerrado.");
+
+        var ids = (input.DividaIds ?? []).Distinct().ToList();
+        if (ids.Count == 0)
+            throw new RegraNegocioException("Selecione ao menos uma dívida em aberto para participar.");
+
+        var (totalDividasMeta, valorPorDivida) = CalcularRegraGrupo(g);
+        var dividasOutros = g.Participacoes.Where(p => p.UsuarioId != usuarioId).Sum(p => p.Dividas.Count);
+        var vagasRestantes = totalDividasMeta - dividasOutros;
+        if (ids.Count > vagasRestantes)
+            throw new RegraNegocioException($"Restam apenas {vagasRestantes} vaga(s) de dívida neste grupo.");
+
+        var dividasSel = await dividas.ListarPorIdsAsync(ids);
+        if (dividasSel.Count != ids.Count)
+            throw new RegraNegocioException("Uma ou mais dívidas selecionadas não foram encontradas.");
+        if (dividasSel.Any(d => d.UsuarioId != usuarioId))
+            throw new RegraNegocioException("Você só pode incluir as suas próprias dívidas no grupo.");
+        if (dividasSel.Any(d => d.Status != StatusDivida.Aceita))
+            throw new RegraNegocioException("Apenas dívidas em aberto (aceitas) podem ser pagas em grupo.");
+        if (await repo.AlgumaDividaEmOutroGrupoAbertoAsync(ids, ignorarGrupoId: grupoId))
+            throw new RegraNegocioException("Uma ou mais dívidas já estão vinculadas a outro grupo aberto.");
+
+        var valorUsuario = Math.Round(ids.Count * valorPorDivida, 2);
+        var existente = g.Participacoes.FirstOrDefault(p => p.UsuarioId == usuarioId);
+        if (existente != null)
+        {
+            existente.ValorContribuido = valorUsuario;
+            existente.Dividas.Clear();
+            foreach (var d in dividasSel)
+                existente.Dividas.Add(new GrupoPagamentoDivida { GrupoPagamentoParticipacaoId = existente.Id, DividaId = d.Id, Divida = d });
+        }
+        else
+        {
+            var nova = new GrupoPagamentoParticipacao
+            {
+                GrupoPagamentoId = g.Id,
+                UsuarioId = usuarioId,
+                ValorContribuido = valorUsuario,
+                CriadoEm = DateTime.Now,
+                Dividas = dividasSel.Select(d => new GrupoPagamentoDivida { DividaId = d.Id, Divida = d }).ToList()
+            };
+            g.Participacoes.Add(nova);
+        }
+
+        // Fecha automaticamente quando todas as dívidas do grupo são preenchidas (valor do produto atingido)
+        if (dividasOutros + ids.Count >= totalDividasMeta)
+            FecharEQuitar(g, usuarioId, valorPorDivida);
+
+        await repo.SalvarAsync();
+        return ToDto((await repo.ObterAsync(g.Id))!);
+    }
+
+    public async Task<GrupoPagamentoDto> SairAsync(int grupoId, int usuarioId)
+    {
+        var g = await repo.ObterAsync(grupoId) ?? throw new NaoEncontradoException("Grupo de pagamento não encontrado.");
+        if (g.Status != StatusGrupoPagamento.Aberto)
+            throw new RegraNegocioException("Não é possível sair de um grupo já encerrado.");
+
+        var part = g.Participacoes.FirstOrDefault(p => p.UsuarioId == usuarioId);
+        if (part != null)
+        {
+            g.Participacoes.Remove(part);
+            repo.RemoverParticipacao(part);
+            await repo.SalvarAsync();
+        }
+        return ToDto((await repo.ObterAsync(g.Id))!);
+    }
+
+    public async Task<GrupoPagamentoDto> FecharAsync(int grupoId, int usuarioId, bool podeGerenciar)
+    {
+        var g = await repo.ObterAsync(grupoId) ?? throw new NaoEncontradoException("Grupo de pagamento não encontrado.");
+        if (g.Status != StatusGrupoPagamento.Aberto)
+            throw new RegraNegocioException("Este grupo já foi encerrado.");
+        if (g.CriadoPorId != usuarioId && !podeGerenciar)
+            throw new RegraNegocioException("Apenas quem criou o grupo (ou um gestor/admin) pode fechá-lo manualmente.");
+        if (g.Participacoes.Count == 0)
+            throw new RegraNegocioException("O grupo precisa ter ao menos um participante para ser fechado.");
+
+        var (_, valorPorDivida) = CalcularRegraGrupo(g);
+        FecharEQuitar(g, usuarioId, valorPorDivida);
+        await repo.SalvarAsync();
+        return ToDto((await repo.ObterAsync(g.Id))!);
+    }
+
+    public async Task CancelarAsync(int grupoId, int usuarioId, bool podeGerenciar)
+    {
+        var g = await repo.ObterAsync(grupoId) ?? throw new NaoEncontradoException("Grupo de pagamento não encontrado.");
+        if (g.Status != StatusGrupoPagamento.Aberto)
+            throw new RegraNegocioException("Este grupo já foi encerrado.");
+        if (g.CriadoPorId != usuarioId && !podeGerenciar)
+            throw new RegraNegocioException("Apenas quem criou o grupo (ou um gestor/admin) pode cancelá-lo.");
+
+        g.Status = StatusGrupoPagamento.Cancelado;
+        g.FechadoEm = DateTime.Now;
+        await repo.SalvarAsync();
     }
 }

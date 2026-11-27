@@ -14,6 +14,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PerfilPermissao> PerfilPermissoes => Set<PerfilPermissao>();
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<ConfiguracaoSistema> Configuracoes => Set<ConfiguracaoSistema>();
+    public DbSet<Produto> Produtos => Set<Produto>();
+    public DbSet<GrupoPagamento> GruposPagamento => Set<GrupoPagamento>();
+    public DbSet<GrupoPagamentoParticipacao> GrupoPagamentoParticipacoes => Set<GrupoPagamentoParticipacao>();
+    public DbSet<GrupoPagamentoDivida> GrupoPagamentoDividas => Set<GrupoPagamentoDivida>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -130,7 +134,43 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<ConfiguracaoSistema>(e =>
         {
             e.HasKey(c => c.Id);
-            e.HasData(new ConfiguracaoSistema { Id = 1, ExigirAceiteDivida = true, TipoDividaAniversario = TipoDivida.CentoSalgado });
+            e.Property(c => c.ValorMinimoQuitacaoConjunta).HasPrecision(10, 2);
+            e.HasData(new ConfiguracaoSistema
+            {
+                Id = 1,
+                ExigirAceiteDivida = true,
+                TipoDividaAniversario = TipoDivida.CentoSalgado,
+                ValorMinimoQuitacaoConjunta = 30m
+            });
+        });
+
+        b.Entity<Produto>(e =>
+        {
+            e.Property(p => p.Nome).HasMaxLength(150).IsRequired();
+            e.Property(p => p.Valor).HasPrecision(10, 2);
+        });
+
+        b.Entity<GrupoPagamento>(e =>
+        {
+            e.Property(g => g.ValorMeta).HasPrecision(10, 2);
+            e.Property(g => g.ValorMinimoPorDivida).HasPrecision(10, 2);
+            e.Property(g => g.Observacao).HasMaxLength(300);
+            e.HasOne(g => g.Produto).WithMany().HasForeignKey(g => g.ProdutoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(g => g.CriadoPor).WithMany().HasForeignKey(g => g.CriadoPorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<GrupoPagamentoParticipacao>(e =>
+        {
+            e.Property(p => p.ValorContribuido).HasPrecision(10, 2);
+            e.HasOne(p => p.GrupoPagamento).WithMany(g => g.Participacoes).HasForeignKey(p => p.GrupoPagamentoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(p => p.Usuario).WithMany().HasForeignKey(p => p.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<GrupoPagamentoDivida>(e =>
+        {
+            e.HasKey(x => new { x.GrupoPagamentoParticipacaoId, x.DividaId });
+            e.HasOne(x => x.Participacao).WithMany(p => p.Dividas).HasForeignKey(x => x.GrupoPagamentoParticipacaoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Divida).WithMany().HasForeignKey(x => x.DividaId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

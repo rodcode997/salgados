@@ -16,6 +16,7 @@ public interface IMotivoRepository
 public interface IDividaRepository
 {
     Task<List<Divida>> ListarAsync(int? usuarioId, StatusDivida? status);
+    Task<List<Divida>> ListarPorIdsAsync(IEnumerable<int> ids);
     Task<Divida?> ObterAsync(int id);
     Task<Pagamento?> ObterPagamentoAsync(int pagamentoId);
     Task<bool> ExisteAniversarioNoAnoAsync(int usuarioId, int motivoId, int ano);
@@ -50,6 +51,30 @@ public interface IUsuarioRepository
     Task SalvarAsync();
 }
 
+public interface IConfiguracaoRepository
+{
+    Task<ConfiguracaoSistema> ObterAsync();
+    Task SalvarAsync();
+}
+
+public interface IProdutoRepository
+{
+    Task<List<Produto>> ListarAsync();
+    Task<Produto?> ObterAsync(int id);
+    Task AdicionarAsync(Produto p);
+    Task SalvarAsync();
+}
+
+public interface IGrupoPagamentoRepository
+{
+    Task<List<GrupoPagamento>> ListarAsync();
+    Task<GrupoPagamento?> ObterAsync(int id);
+    Task<bool> AlgumaDividaEmOutroGrupoAbertoAsync(IEnumerable<int> dividaIds, int? ignorarGrupoId = null);
+    Task AdicionarAsync(GrupoPagamento g);
+    void RemoverParticipacao(GrupoPagamentoParticipacao p);
+    Task SalvarAsync();
+}
+
 public class MotivoRepository(AppDbContext db) : IMotivoRepository
 {
     public Task<List<Motivo>> ListarAsync() => db.Motivos.OrderBy(m => m.Descricao).ToListAsync();
@@ -79,6 +104,9 @@ public class DividaRepository(AppDbContext db) : IDividaRepository
         if (status.HasValue) q = q.Where(d => d.Status == status.Value);
         return q.OrderByDescending(d => d.CriadoEm).ThenByDescending(d => d.Id).ToListAsync();
     }
+
+    public Task<List<Divida>> ListarPorIdsAsync(IEnumerable<int> ids) =>
+        db.Dividas.Include(d => d.Pagamentos).Where(d => ids.Contains(d.Id)).ToListAsync();
 
     public Task<Divida?> ObterAsync(int id) =>
         QueryCompleta().FirstOrDefaultAsync(d => d.Id == id);
@@ -166,12 +194,6 @@ public class UsuarioRepository(AppDbContext db) : IUsuarioRepository
     public Task SalvarAsync() => db.SaveChangesAsync();
 }
 
-public interface IConfiguracaoRepository
-{
-    Task<ConfiguracaoSistema> ObterAsync();
-    Task SalvarAsync();
-}
-
 public class ConfiguracaoRepository(AppDbContext db) : IConfiguracaoRepository
 {
     public async Task<ConfiguracaoSistema> ObterAsync()
@@ -179,12 +201,58 @@ public class ConfiguracaoRepository(AppDbContext db) : IConfiguracaoRepository
         var cfg = await db.Configuracoes.FirstOrDefaultAsync(c => c.Id == 1);
         if (cfg is null)
         {
-            cfg = new ConfiguracaoSistema { Id = 1, ExigirAceiteDivida = true };
+            cfg = new ConfiguracaoSistema
+            {
+                Id = 1,
+                ExigirAceiteDivida = true,
+                TipoDividaAniversario = TipoDivida.CentoSalgado,
+                ValorMinimoQuitacaoConjunta = 30m
+            };
             await db.Configuracoes.AddAsync(cfg);
             await db.SaveChangesAsync();
         }
         return cfg;
     }
 
+    public Task SalvarAsync() => db.SaveChangesAsync();
+}
+
+public class ProdutoRepository(AppDbContext db) : IProdutoRepository
+{
+    public Task<List<Produto>> ListarAsync() => db.Produtos.OrderBy(p => p.Nome).ToListAsync();
+    public Task<Produto?> ObterAsync(int id) => db.Produtos.FindAsync(id).AsTask();
+    public async Task AdicionarAsync(Produto p) => await db.Produtos.AddAsync(p);
+    public Task SalvarAsync() => db.SaveChangesAsync();
+}
+
+public class GrupoPagamentoRepository(AppDbContext db) : IGrupoPagamentoRepository
+{
+    private IQueryable<GrupoPagamento> QueryCompleta() => db.GruposPagamento
+        .Include(g => g.Produto)
+        .Include(g => g.CriadoPor)
+        .Include(g => g.Participacoes).ThenInclude(p => p.Usuario)
+        .Include(g => g.Participacoes).ThenInclude(p => p.Dividas).ThenInclude(d => d.Divida!).ThenInclude(d => d.Motivo)
+        .Include(g => g.Participacoes).ThenInclude(p => p.Dividas).ThenInclude(d => d.Divida!).ThenInclude(d => d.Pagamentos)
+        .AsSplitQuery();
+
+    public Task<List<GrupoPagamento>> ListarAsync() =>
+        QueryCompleta()
+            .Where(g => g.Status == StatusGrupoPagamento.Aberto || g.Status == StatusGrupoPagamento.Fechado)
+            .OrderBy(g => g.Status)
+            .ThenByDescending(g => g.CriadoEm)
+            .Take(20)
+            .ToListAsync();
+
+    public Task<GrupoPagamento?> ObterAsync(int id) =>
+        QueryCompleta().FirstOrDefaultAsync(g => g.Id == id);
+
+    public Task<bool> AlgumaDividaEmOutroGrupoAbertoAsync(IEnumerable<int> dividaIds, int? ignorarGrupoId = null) =>
+        db.GrupoPagamentoDividas.AnyAsync(gd =>
+            dividaIds.Contains(gd.DividaId) &&
+            gd.Participacao!.GrupoPagamento!.Status == StatusGrupoPagamento.Aberto &&
+            (!ignorarGrupoId.HasValue || gd.Participacao.GrupoPagamentoId != ignorarGrupoId.Value));
+
+    public async Task AdicionarAsync(GrupoPagamento g) => await db.GruposPagamento.AddAsync(g);
+    public void RemoverParticipacao(GrupoPagamentoParticipacao p) => db.GrupoPagamentoParticipacoes.Remove(p);
     public Task SalvarAsync() => db.SaveChangesAsync();
 }

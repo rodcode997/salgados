@@ -69,5 +69,19 @@ export const api = {
 
   // Configurações do sistema
   configuracoes: () => req('/configuracoes'),
-  atualizarConfiguracoes: (d) => req('/configuracoes', { method: 'PUT', body: d })
+  atualizarConfiguracoes: (d) => req('/configuracoes', { method: 'PUT', body: d }),
+
+  // Produtos (para pagamento em conjunto)
+  produtos: () => req('/produtos'),
+  criarProduto: (d) => req('/produtos', { method: 'POST', body: d }),
+  atualizarProduto: (id, d) => req(`/produtos/${id}`, { method: 'PUT', body: d }),
+  ativoProduto: (id, ativo) => req(`/produtos/${id}/ativo/${ativo}`, { method: 'PATCH' }),
+
+  // Grupos de pagamento em conjunto
+  gruposPagamento: () => req('/grupos-pagamento'),
+  criarGrupoPagamento: (d) => req('/grupos-pagamento', { method: 'POST', body: d }),
+  participarGrupo: (id, d) => req(`/grupos-pagamento/${id}/participar`, { method: 'POST', body: d }),
+  sairGrupo: (id) => req(`/grupos-pagamento/${id}/participar`, { method: 'DELETE' }),
+  fecharGrupo: (id) => req(`/grupos-pagamento/${id}/fechar`, { method: 'POST' }),
+  cancelarGrupo: (id) => req(`/grupos-pagamento/${id}/cancelar`, { method: 'POST' })
 }

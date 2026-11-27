@@ -22,6 +22,8 @@ builder.Services.AddScoped<IPermissaoRepository, PermissaoRepository>();
 builder.Services.AddScoped<IPerfilRepository, PerfilRepository>();
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
+builder.Services.AddScoped<IProdutoRepository, ProdutoRepository>();
+builder.Services.AddScoped<IGrupoPagamentoRepository, GrupoPagamentoRepository>();
 
 builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddScoped<IMotivoService, MotivoService>();
@@ -30,6 +32,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPerfilService, PerfilService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IConfiguracaoService, ConfiguracaoService>();
+builder.Services.AddScoped<IProdutoService, ProdutoService>();
+builder.Services.AddScoped<IGrupoPagamentoService, GrupoPagamentoService>();
 builder.Services.AddScoped<IAniversarioService, AniversarioService>();
 builder.Services.AddHostedService<AniversarioHostedService>();
 
@@ -104,6 +108,12 @@ using (var scope = app.Services.CreateScope())
             alter.CommandText = "ALTER TABLE Usuarios ADD COLUMN DataNascimento TEXT;";
             alter.ExecuteNonQuery();
         }
+        if (!cols.Contains("DeveAlterarSenha"))
+        {
+            using var alter = conn.CreateCommand();
+            alter.CommandText = "ALTER TABLE Usuarios ADD COLUMN DeveAlterarSenha INTEGER NOT NULL DEFAULT 0;";
+            alter.ExecuteNonQuery();
+        }
         using var updAdmin = conn.CreateCommand();
         updAdmin.CommandText = "UPDATE Usuarios SET Login = 'admin' WHERE LOWER(Login) = 'admin@salgados.com' AND NOT EXISTS (SELECT 1 FROM Usuarios WHERE LOWER(Login) = 'admin');";
         updAdmin.ExecuteNonQuery();
@@ -122,24 +132,89 @@ using (var scope = app.Services.CreateScope())
     using (var cfgColsCmd = conn.CreateCommand())
     {
         cfgColsCmd.CommandText = "PRAGMA table_info(Configuracoes);";
-        var temTipoAniv = false;
+        var cfgCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using (var reader = cfgColsCmd.ExecuteReader())
         {
             while (reader.Read())
-                if (string.Equals(reader.GetString(1), "TipoDividaAniversario", StringComparison.OrdinalIgnoreCase))
-                    temTipoAniv = true;
+                cfgCols.Add(reader.GetString(1));
         }
-        if (!temTipoAniv)
+        if (!cfgCols.Contains("TipoDividaAniversario"))
         {
             using var alter = conn.CreateCommand();
             alter.CommandText = "ALTER TABLE Configuracoes ADD COLUMN TipoDividaAniversario INTEGER NOT NULL DEFAULT 1;";
             alter.ExecuteNonQuery();
         }
+        if (!cfgCols.Contains("ValorMinimoQuitacaoConjunta"))
+        {
+            using var alter = conn.CreateCommand();
+            alter.CommandText = "ALTER TABLE Configuracoes ADD COLUMN ValorMinimoQuitacaoConjunta TEXT NOT NULL DEFAULT '30';";
+            alter.ExecuteNonQuery();
+        }
     }
     using (var seedCfgCmd = conn.CreateCommand())
     {
-        seedCfgCmd.CommandText = "INSERT OR IGNORE INTO Configuracoes (Id, ExigirAceiteDivida, TipoDividaAniversario) VALUES (1, 1, 1);";
+        seedCfgCmd.CommandText = "INSERT OR IGNORE INTO Configuracoes (Id, ExigirAceiteDivida, TipoDividaAniversario, ValorMinimoQuitacaoConjunta) VALUES (1, 1, 1, '30');";
         seedCfgCmd.ExecuteNonQuery();
+    }
+    using (var gruposCmd = conn.CreateCommand())
+    {
+        gruposCmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS Produtos (
+                Id INTEGER NOT NULL CONSTRAINT PK_Produtos PRIMARY KEY AUTOINCREMENT,
+                Nome TEXT NOT NULL,
+                Valor TEXT NOT NULL,
+                Ativo INTEGER NOT NULL DEFAULT 1,
+                CriadoEm TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS GruposPagamento (
+                Id INTEGER NOT NULL CONSTRAINT PK_GruposPagamento PRIMARY KEY AUTOINCREMENT,
+                ProdutoId INTEGER NOT NULL,
+                ValorMeta TEXT NOT NULL,
+                ValorMinimoPorDivida TEXT NOT NULL,
+                DataCompra TEXT NULL,
+                Observacao TEXT NULL,
+                Status INTEGER NOT NULL DEFAULT 1,
+                CriadoPorId INTEGER NOT NULL,
+                CriadoEm TEXT NOT NULL,
+                FechadoEm TEXT NULL,
+                CONSTRAINT FK_GruposPagamento_Produtos_ProdutoId FOREIGN KEY (ProdutoId) REFERENCES Produtos (Id) ON DELETE RESTRICT,
+                CONSTRAINT FK_GruposPagamento_Usuarios_CriadoPorId FOREIGN KEY (CriadoPorId) REFERENCES Usuarios (Id) ON DELETE RESTRICT
+            );
+            CREATE TABLE IF NOT EXISTS GrupoPagamentoParticipacoes (
+                Id INTEGER NOT NULL CONSTRAINT PK_GrupoPagamentoParticipacoes PRIMARY KEY AUTOINCREMENT,
+                GrupoPagamentoId INTEGER NOT NULL,
+                UsuarioId INTEGER NOT NULL,
+                ValorContribuido TEXT NOT NULL,
+                CriadoEm TEXT NOT NULL,
+                CONSTRAINT FK_GrupoPagamentoParticipacoes_GruposPagamento_GrupoPagamentoId FOREIGN KEY (GrupoPagamentoId) REFERENCES GruposPagamento (Id) ON DELETE CASCADE,
+                CONSTRAINT FK_GrupoPagamentoParticipacoes_Usuarios_UsuarioId FOREIGN KEY (UsuarioId) REFERENCES Usuarios (Id) ON DELETE RESTRICT
+            );
+            CREATE TABLE IF NOT EXISTS GrupoPagamentoDividas (
+                GrupoPagamentoParticipacaoId INTEGER NOT NULL,
+                DividaId INTEGER NOT NULL,
+                CONSTRAINT PK_GrupoPagamentoDividas PRIMARY KEY (GrupoPagamentoParticipacaoId, DividaId),
+                CONSTRAINT FK_GrupoPagamentoDividas_GrupoPagamentoParticipacoes_GrupoPagamentoParticipacaoId FOREIGN KEY (GrupoPagamentoParticipacaoId) REFERENCES GrupoPagamentoParticipacoes (Id) ON DELETE CASCADE,
+                CONSTRAINT FK_GrupoPagamentoDividas_Dividas_DividaId FOREIGN KEY (DividaId) REFERENCES Dividas (Id) ON DELETE RESTRICT
+            );
+            """;
+        gruposCmd.ExecuteNonQuery();
+    }
+    using (var grpColsCmd = conn.CreateCommand())
+    {
+        grpColsCmd.CommandText = "PRAGMA table_info(GruposPagamento);";
+        var temDataCompra = false;
+        using (var reader = grpColsCmd.ExecuteReader())
+        {
+            while (reader.Read())
+                if (string.Equals(reader.GetString(1), "DataCompra", StringComparison.OrdinalIgnoreCase))
+                    temDataCompra = true;
+        }
+        if (!temDataCompra)
+        {
+            using var alter = conn.CreateCommand();
+            alter.CommandText = "ALTER TABLE GruposPagamento ADD COLUMN DataCompra TEXT NULL;";
+            alter.ExecuteNonQuery();
+        }
     }
     conn.Close();
 
@@ -151,7 +226,8 @@ using (var scope = app.Services.CreateScope())
             Nome = "Administrador",
             Login = "admin",
             PerfilId = 1,
-            Ativo = true
+            Ativo = true,
+            DeveAlterarSenha = false
         };
         admin.SenhaHash = hasher.HashPassword(admin, "Admin@123");
         db.Usuarios.Add(admin);

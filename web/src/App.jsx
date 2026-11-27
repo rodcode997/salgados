@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Search, X, CheckCircle2, AlertCircle, ChevronRight, LogOut, KeyRound,
-  Pencil, Shield, Eye, LayoutDashboard, ReceiptText, Users, Tag, ShieldCheck, Menu, Settings
+  Pencil, Shield, Eye, LayoutDashboard, ReceiptText, Users, Tag, ShieldCheck, Menu, Settings, ShoppingBag
 } from 'lucide-react'
 import { api, getToken, setToken, setOnUnauthorized } from './api'
 import { Avatar, EditorAvatar, avatarPadrao, parseAvatar, serializeAvatar } from './avatar'
+import { GrupoFlutuante } from './GrupoFlutuante'
 
 const hoje = () => new Date().toISOString().slice(0, 10)
 const fmtData = (d) => (d ? new Date(d).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—')
@@ -138,6 +139,7 @@ export default function App() {
     if (tem(PERM.DIVIDAS_VER) && tem(PERM.USUARIOS_VER)) lista.push(['painel', 'Painel', LayoutDashboard])
     if (tem(PERM.DIVIDAS_VER)) lista.push(['dividas', 'Dívidas', ReceiptText])
     if (tem(PERM.USUARIOS_VER)) lista.push(['usuarios', 'Usuários', Users])
+    lista.push(['produtos', 'Produtos', ShoppingBag])
     if (tem(PERM.MOTIVOS_VER)) lista.push(['motivos', 'Motivos', Tag])
     if (tem(PERM.PERFIS_GERENCIAR)) lista.push(['perfis', 'Perfis', ShieldCheck])
     if (tem(PERM.PERFIS_GERENCIAR)) lista.push(['configuracoes', 'Configurações', Settings])
@@ -156,6 +158,21 @@ export default function App() {
     return (
       <>
         <TelaLogin onLogin={(res) => { setToken(res.token); setUsuario(res.usuario); avisar(`Bem-vindo(a), ${res.usuario.nome}!`) }} avisar={avisar} />
+        {toast && <div className={'toast ' + toast.tipo}>{toast.tipo === 'erro' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}{toast.msg}</div>}
+      </>
+    )
+  }
+
+  if (usuario.deveAlterarSenha) {
+    return (
+      <>
+        <TelaPrimeiroAcesso
+          usuario={usuario}
+          exec={exec}
+          avisar={avisar}
+          onConcluido={() => setUsuario((u) => (u ? { ...u, deveAlterarSenha: false } : u))}
+          onSair={sair}
+        />
         {toast && <div className={'toast ' + toast.tipo}>{toast.tipo === 'erro' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}{toast.msg}</div>}
       </>
     )
@@ -244,12 +261,21 @@ export default function App() {
               onUpdateSessao={(u) => setUsuario((prev) => (prev && prev.id === u.id ? { ...prev, nome: u.nome, login: u.login, avatar: u.avatar } : prev))}
             />
           )}
+          {pag === 'produtos' && <Produtos exec={exec} tem={tem} />}
           {pag === 'motivos' && <Motivos exec={exec} tem={tem} />}
           {pag === 'perfis' && <Perfis exec={exec} />}
           {pag === 'configuracoes' && <Configuracoes exec={exec} />}
           {!abas.length && <div className="card"><Vazio texto="Seu perfil não possui permissões de visualização." emo="🔒" /></div>}
         </main>
       </div>
+
+      <GrupoFlutuante
+        usuarioLogado={usuario}
+        exec={exec}
+        tem={tem}
+        versao={versaoAvatar}
+        onAtualizar={() => setVersaoAvatar((v) => v + 1)}
+      />
 
       {modalSenha && <ModalAlterarSenha exec={exec} onClose={() => setModalSenha(false)} />}
       {modalAvatar && (
@@ -309,6 +335,51 @@ function TelaLogin({ onLogin, avisar }) {
         <div className="login-dica">
           Admin padrão: <code>admin</code> / <code>Admin@123</code>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function TelaPrimeiroAcesso({ usuario, exec, avisar, onConcluido, onSair }) {
+  const [senhaAtual, setSenhaAtual] = useState('')
+  const [novaSenha, setNovaSenha] = useState('')
+  const [confirmacao, setConfirmacao] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  const salvar = async (e) => {
+    e.preventDefault()
+    if (novaSenha !== confirmacao) {
+      avisar('A confirmação não confere com a nova senha.', 'erro')
+      return
+    }
+    setSalvando(true)
+    const ok = await exec(() => api.alterarSenha({ senhaAtual, novaSenha }), 'Senha atualizada! Bem-vindo(a)!')
+    setSalvando(false)
+    if (ok) onConcluido()
+  }
+
+  return (
+    <div className="login-tela">
+      {DECO.map(([e, l, t, r], i) => (
+        <span key={i} className="deco" style={{ left: l, top: t, transform: `rotate(${r}deg)` }}>{e}</span>
+      ))}
+      <div className="login-card">
+        <div className="login-topo">
+          <Coxinha size={64} />
+          <h1>Primeiro acesso 🔐</h1>
+          <p>Olá, <b>{usuario.nome}</b>! Por segurança, defina sua nova senha para continuar.</p>
+        </div>
+        <form className="coluna" onSubmit={salvar}>
+          <label>Senha provisória (atual)<input type="password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} required autoFocus /></label>
+          <label>Nova senha (mín. 6 caracteres)<input type="password" minLength={6} value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} required /></label>
+          <label>Confirmar nova senha<input type="password" minLength={6} value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} required /></label>
+          <button className="grande" style={{ justifyContent: 'center', marginTop: 6 }} disabled={salvando}>
+            {salvando ? 'Salvando...' : 'Salvar nova senha e entrar'}
+          </button>
+          <button type="button" className="sec" style={{ justifyContent: 'center' }} onClick={onSair}>
+            <LogOut size={16} />Sair
+          </button>
+        </form>
       </div>
     </div>
   )
@@ -1207,17 +1278,35 @@ function Perfis({ exec }) {
 
 function Configuracoes({ exec }) {
   const [cfg, setCfg] = useState(null)
+  const [valorMin, setValorMin] = useState('')
   const [salvando, setSalvando] = useState(false)
 
   useEffect(() => {
-    exec(api.configuracoes).then((r) => r && setCfg(r))
+    exec(api.configuracoes).then((r) => {
+      if (r) {
+        setCfg(r)
+        setValorMin(String(r.valorMinimoQuitacaoConjunta ?? 30))
+      }
+    })
   }, [])
 
   const salvarCfg = async (proximo, msg) => {
     setSalvando(true)
     const r = await exec(() => api.atualizarConfiguracoes(proximo), msg)
-    if (r) setCfg(r)
+    if (r) {
+      setCfg(r)
+      setValorMin(String(r.valorMinimoQuitacaoConjunta))
+    }
     setSalvando(false)
+  }
+
+  const salvarValorMin = (e) => {
+    e.preventDefault()
+    if (!cfg) return
+    salvarCfg(
+      { ...cfg, valorMinimoQuitacaoConjunta: Number(valorMin) },
+      'Valor mínimo de quitação em conjunto atualizado!'
+    )
   }
 
   return (
@@ -1295,9 +1384,104 @@ function Configuracoes({ exec }) {
                 ))}
               </div>
             </div>
+
+            <div className="config-item">
+              <div className="config-info">
+                <div className="config-titulo">
+                  <h4>🤝 Valor mínimo por dívida (pagamento em conjunto)</h4>
+                  <span className="badge b-neutro">{fmtValor(cfg.valorMinimoQuitacaoConjunta)}</span>
+                </div>
+                <p>
+                  Valor mínimo que cada participante precisa contribuir por dívida selecionada ao entrar em um grupo de pagamento.
+                </p>
+              </div>
+              <form className="config-valor" onSubmit={salvarValorMin}>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={valorMin}
+                  onChange={(e) => setValorMin(e.target.value)}
+                  disabled={salvando}
+                  required
+                />
+                <button disabled={salvando}>Salvar</button>
+              </form>
+            </div>
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+function Produtos({ exec, tem }) {
+  const [produtos, setProdutos] = useState([])
+  const [editando, setEditando] = useState(null)
+  const [form, setForm] = useState({ nome: '', valor: '' })
+  const podeGerenciar = tem(PERM.MOTIVOS_GERENCIAR)
+
+  const carregar = () => exec(api.produtos).then((p) => Array.isArray(p) && setProdutos(p))
+  useEffect(() => { carregar() }, [])
+
+  const abrirNovo = () => { setForm({ nome: '', valor: '' }); setEditando('novo') }
+  const abrirEdicao = (p) => { setForm({ nome: p.nome, valor: String(p.valor) }); setEditando(p) }
+
+  const salvar = async (e) => {
+    e.preventDefault()
+    const payload = { nome: form.nome, valor: Number(form.valor) }
+    const ok = editando === 'novo'
+      ? await exec(() => api.criarProduto(payload), 'Produto cadastrado!')
+      : await exec(() => api.atualizarProduto(editando.id, payload), 'Produto atualizado!')
+    if (ok) { setEditando(null); carregar() }
+  }
+
+  const alternar = async (p) => {
+    if (await exec(() => api.ativoProduto(p.id, !p.ativo), p.ativo ? 'Produto desativado' : 'Produto ativado')) carregar()
+  }
+
+  return (
+    <>
+      <div className="card">
+        <div className="card-cab">
+          <div>
+            <h3>Produtos para Pagamento em Grupo</h3>
+            <p>{produtos.filter((p) => p.ativo).length} produto(s) ativo(s) disponíveis para criar grupos</p>
+          </div>
+          {podeGerenciar && <button onClick={abrirNovo}><Plus size={18} />Novo produto</button>}
+        </div>
+        {produtos.length ? (
+          <div className="produtos-grid">
+            {produtos.map((p) => (
+              <div key={p.id} className={'produto-card' + (p.ativo ? '' : ' inativo')}>
+                <div className="produto-top">
+                  <h4>{p.nome}</h4>
+                  <span className={'badge ' + (p.ativo ? 'b-quitada' : 'b-neutro')}>{p.ativo ? 'Ativo' : 'Inativo'}</span>
+                </div>
+                <div className="produto-valor num">{fmtValor(p.valor)}</div>
+                {podeGerenciar && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
+                    <button className="sec peq" onClick={() => abrirEdicao(p)}><Pencil size={13} />Editar</button>
+                    <button className={p.ativo ? 'sec peq' : 'ok peq'} onClick={() => alternar(p)}>
+                      {p.ativo ? 'Desativar' : 'Ativar'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : <Vazio texto="Nenhum produto cadastrado ainda. Cadastre um produto com valor para usar nos grupos de pagamento!" emo="🛍️" />}
+      </div>
+
+      {editando && (
+        <Modal peq titulo={editando === 'novo' ? 'Novo produto' : 'Editar produto'} onClose={() => setEditando(null)}
+          rodape={<><button className="sec" onClick={() => setEditando(null)}>Cancelar</button><button form="f-prod">Salvar</button></>}>
+          <form id="f-prod" className="coluna" onSubmit={salvar}>
+            <label>Nome do produto<input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Ex.: Bolo de chocolate + Refri" required autoFocus /></label>
+            <label>Valor (R$)<input type="number" step="0.01" min="0.01" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="120.00" required /></label>
+          </form>
+        </Modal>
+      )}
+    </>
   )
 }

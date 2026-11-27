@@ -179,3 +179,61 @@ public class ConfiguracoesController(IConfiguracaoService service) : ControllerB
     [Authorize(Policy = PermissoesCodigos.PerfisGerenciar)]
     public Task<ConfiguracaoDto> Atualizar(ConfiguracaoInput input) => service.AtualizarAsync(input);
 }
+
+[ApiController]
+[Route("api/produtos")]
+[Authorize]
+public class ProdutosController(IProdutoService service) : ControllerBase
+{
+    [HttpGet]
+    public Task<List<ProdutoDto>> Listar() => service.ListarAsync();
+
+    [HttpPost]
+    [Authorize(Policy = PermissoesCodigos.MotivosGerenciar)]
+    public Task<ProdutoDto> Criar(ProdutoInput input) => service.CriarAsync(input);
+
+    [HttpPut("{id:int}")]
+    [Authorize(Policy = PermissoesCodigos.MotivosGerenciar)]
+    public Task<ProdutoDto> Atualizar(int id, ProdutoInput input) => service.AtualizarAsync(id, input);
+
+    [HttpPatch("{id:int}/ativo/{ativo:bool}")]
+    [Authorize(Policy = PermissoesCodigos.MotivosGerenciar)]
+    public async Task<IActionResult> Ativo(int id, bool ativo) { await service.AlterarAtivoAsync(id, ativo); return NoContent(); }
+}
+
+[ApiController]
+[Route("api/grupos-pagamento")]
+[Authorize]
+public class GruposPagamentoController(IGrupoPagamentoService service) : ControllerBase
+{
+    private int ObterUsuarioId() =>
+        int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new NaoAutorizadoException("Token inválido."));
+
+    [HttpGet]
+    public Task<List<GrupoPagamentoDto>> Listar() => service.ListarAsync();
+
+    [HttpPost]
+    public Task<GrupoPagamentoDto> Criar(GrupoPagamentoCreateInput input) => service.CriarAsync(input, ObterUsuarioId());
+
+    [HttpPost("{id:int}/participar")]
+    public Task<GrupoPagamentoDto> Participar(int id, GrupoParticiparInput input) =>
+        service.ParticiparAsync(id, input, ObterUsuarioId());
+
+    [HttpDelete("{id:int}/participar")]
+    public Task<GrupoPagamentoDto> Sair(int id) => service.SairAsync(id, ObterUsuarioId());
+
+    [HttpPost("{id:int}/fechar")]
+    public Task<GrupoPagamentoDto> Fechar(int id)
+    {
+        var podeGerenciar = User.HasClaim("perm", PermissoesCodigos.DividasQuitar);
+        return service.FecharAsync(id, ObterUsuarioId(), podeGerenciar);
+    }
+
+    [HttpPost("{id:int}/cancelar")]
+    public async Task<IActionResult> Cancelar(int id)
+    {
+        var podeGerenciar = User.HasClaim("perm", PermissoesCodigos.DividasQuitar);
+        await service.CancelarAsync(id, ObterUsuarioId(), podeGerenciar);
+        return NoContent();
+    }
+}

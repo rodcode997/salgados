@@ -156,6 +156,7 @@ public class Usuario
     public string SenhaHash { get; set; } = string.Empty;
     public DateTime? DataNascimento { get; set; }
     public string? Avatar { get; set; }
+    public bool DeveAlterarSenha { get; set; } = true;
     public bool Ativo { get; set; } = true;
     public DateTime CriadoEm { get; set; } = DateTime.Now;
     public int PerfilId { get; set; }
@@ -168,4 +169,58 @@ public class ConfiguracaoSistema
     public int Id { get; set; } = 1;
     public bool ExigirAceiteDivida { get; set; } = true;
     public TipoDivida TipoDividaAniversario { get; set; } = TipoDivida.CentoSalgado;
+    public decimal ValorMinimoQuitacaoConjunta { get; set; } = 30m;
+}
+
+public class Produto
+{
+    public int Id { get; set; }
+    public string Nome { get; set; } = string.Empty;
+    public decimal Valor { get; set; }
+    public bool Ativo { get; set; } = true;
+    public DateTime CriadoEm { get; set; } = DateTime.Now;
+}
+
+public enum StatusGrupoPagamento
+{
+    Aberto = 1,
+    Fechado = 2,
+    Cancelado = 3
+}
+
+public class GrupoPagamento
+{
+    public int Id { get; set; }
+    public int ProdutoId { get; set; }
+    public Produto? Produto { get; set; }
+    public decimal ValorMeta { get; set; }
+    public decimal ValorMinimoPorDivida { get; set; }
+    public DateTime? DataCompra { get; set; }
+    public string? Observacao { get; set; }
+    public StatusGrupoPagamento Status { get; set; } = StatusGrupoPagamento.Aberto;
+    public int CriadoPorId { get; set; }
+    public Usuario? CriadoPor { get; set; }
+    public DateTime CriadoEm { get; set; } = DateTime.Now;
+    public DateTime? FechadoEm { get; set; }
+    public List<GrupoPagamentoParticipacao> Participacoes { get; set; } = new();
+}
+
+public class GrupoPagamentoParticipacao
+{
+    public int Id { get; set; }
+    public int GrupoPagamentoId { get; set; }
+    public GrupoPagamento? GrupoPagamento { get; set; }
+    public int UsuarioId { get; set; }
+    public Usuario? Usuario { get; set; }
+    public decimal ValorContribuido { get; set; }
+    public DateTime CriadoEm { get; set; } = DateTime.Now;
+    public List<GrupoPagamentoDivida> Dividas { get; set; } = new();
+}
+
+public class GrupoPagamentoDivida
+{
+    public int GrupoPagamentoParticipacaoId { get; set; }
+    public GrupoPagamentoParticipacao? Participacao { get; set; }
+    public int DividaId { get; set; }
+    public Divida? Divida { get; set; }
 }
