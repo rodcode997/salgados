@@ -5,11 +5,22 @@ const BG_COLORS = 'f9c46b,ff9a5c,e5674b,fbe3a0,c8875e'
 export const CABELOS_POR_GENERO = {
   F: [
     { id: 'straight01', label: 'Liso longo' },
+    { id: 'straight02', label: 'Liso com franja' },
+    { id: 'straightAndStrand', label: 'Liso com mecha' },
     { id: 'longButNotTooLong', label: 'Médio liso' },
+    { id: 'curvy', label: 'Ondulado longo' },
     { id: 'bob', label: 'Curto (Bob)' },
+    { id: 'miaWallace', label: 'Chanel com franja' },
     { id: 'curly', label: 'Cacheado' },
+    { id: 'bigHair', label: 'Volumoso' },
     { id: 'bun', label: 'Coque' },
-    { id: 'bigHair', label: 'Volumoso' }
+    { id: 'fro', label: 'Afro / Black power' },
+    { id: 'froBand', label: 'Afro com faixa' },
+    { id: 'dreads', label: 'Dreads longos' },
+    { id: 'shavedSides', label: 'Lateral raspada' },
+    { id: 'frida', label: 'Com flores' },
+    { id: 'winterHat03', label: 'Touca' },
+    { id: 'hijab', label: 'Hijab' }
   ],
   M: [
     { id: 'shortFlat', label: 'Curto liso' },
@@ -17,7 +28,17 @@ export const CABELOS_POR_GENERO = {
     { id: 'shortCurly', label: 'Cacheado' },
     { id: 'shortRound', label: 'Arredondado' },
     { id: 'theCaesar', label: 'Baixo' },
-    { id: 'careca', label: 'Careca' }
+    { id: 'theCaesarAndSidePart', label: 'Baixo repartido' },
+    { id: 'frizzle', label: 'Arrepiado' },
+    { id: 'shaggy', label: 'Bagunçado' },
+    { id: 'shaggyMullet', label: 'Mullet' },
+    { id: 'dreads01', label: 'Dreads curtos' },
+    { id: 'dreads02', label: 'Dreads médios' },
+    { id: 'sides', label: 'Laterais (calvo no topo)' },
+    { id: 'careca', label: 'Careca' },
+    { id: 'hat', label: 'Chapéu' },
+    { id: 'winterHat1', label: 'Touca' },
+    { id: 'turban', label: 'Turbante' }
   ]
 }
 
@@ -42,21 +63,32 @@ export const BARBAS = [
   { id: 'nenhuma', label: 'Sem barba' },
   { id: 'beardLight', label: 'Barba curta' },
   { id: 'beardMedium', label: 'Barba cheia' },
-  { id: 'moustacheFancy', label: 'Bigode' }
+  { id: 'beardMajestic', label: 'Barba longa' },
+  { id: 'moustacheFancy', label: 'Bigode fino' },
+  { id: 'moustacheMagnum', label: 'Bigode grosso' }
 ]
 
 export const OCULOS = [
   { id: 'nenhum', label: 'Sem óculos' },
-  { id: 'prescription02', label: 'Grau' },
+  { id: 'prescription01', label: 'Grau fino' },
+  { id: 'prescription02', label: 'Grau clássico' },
   { id: 'round', label: 'Redondo' },
-  { id: 'sunglasses', label: 'Escuro' }
+  { id: 'sunglasses', label: 'Escuro' },
+  { id: 'wayfarers', label: 'Wayfarer' },
+  { id: 'kurt', label: 'Retrô' },
+  { id: 'eyepatch', label: 'Tapa-olho' }
 ]
 
 export const ROUPAS = [
-  { id: 'shirtCrewNeck', label: 'Camiseta' },
+  { id: 'shirtCrewNeck', label: 'Camiseta gola redonda' },
+  { id: 'shirtVNeck', label: 'Camiseta gola V' },
+  { id: 'shirtScoopNeck', label: 'Blusa gola canoa' },
+  { id: 'graphicShirt', label: 'Camiseta estampada' },
   { id: 'hoodie', label: 'Moletom' },
-  { id: 'collarAndSweater', label: 'Suéter' },
-  { id: 'blazerAndShirt', label: 'Social' }
+  { id: 'collarAndSweater', label: 'Suéter com gola' },
+  { id: 'overall', label: 'Jardineira' },
+  { id: 'blazerAndShirt', label: 'Blazer com camisa' },
+  { id: 'blazerAndSweater', label: 'Blazer com suéter' }
 ]
 
 export function avatarPadrao(genero = 'M') {
@@ -68,7 +100,8 @@ export function avatarPadrao(genero = 'M') {
     pele: 'edb98a',
     barba: 'nenhuma',
     oculos: 'nenhum',
-    roupa: 'shirtCrewNeck'
+    roupa: 'shirtCrewNeck',
+    variacao: 1
   }
 }
 
@@ -101,16 +134,17 @@ export function sortearAvatar(genero = 'M') {
     pele: escolher(TONS_PELE),
     barba: g === 'M' ? escolher(BARBAS) : 'nenhuma',
     oculos: escolher(OCULOS),
-    roupa: escolher(ROUPAS)
+    roupa: escolher(ROUPAS),
+    variacao: Math.floor(Math.random() * 30) + 1
   }
 }
 
 export function buildAvatarUrl(nome, avatar) {
   const params = new URLSearchParams()
-  params.set('seed', nome || 'u')
-  params.set('backgroundColor', BG_COLORS)
-
   const cfg = parseAvatar(avatar)
+  // Quando personalizado, usa a variação fixa para não mudar expressão/cores ao digitar o nome
+  params.set('seed', cfg ? `v-${cfg.variacao ?? 1}` : (nome || 'u'))
+  params.set('backgroundColor', BG_COLORS)
   if (cfg) {
     const g = cfg.genero === 'F' ? 'F' : 'M'
     const cabelosValidos = CABELOS_POR_GENERO[g].map((c) => c.id)
@@ -194,6 +228,22 @@ export function EditorAvatar({ nome, value, onChange }) {
         <button type="button" className="sec peq" title="Sortear características" onClick={() => onChange(sortearAvatar(cfg.genero))}>
           <Shuffle size={14} />Sortear
         </button>
+      </div>
+
+      <div className="avatar-slider-box">
+        <div className="avatar-slider-cab">
+          <span className="avatar-lbl" style={{ margin: 0 }}>Expressão e cores</span>
+          <span className="avatar-slider-val">#{cfg.variacao ?? 1}</span>
+        </div>
+        <input
+          type="range"
+          className="avatar-slider"
+          min={1}
+          max={30}
+          step={1}
+          value={cfg.variacao ?? 1}
+          onChange={(e) => atualizar({ variacao: Number(e.target.value) })}
+        />
       </div>
 
       <div className="avatar-cores">
