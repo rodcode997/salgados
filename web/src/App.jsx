@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Search, X, CheckCircle2, AlertCircle, ChevronRight, LogOut, KeyRound,
-  Pencil, Shield, Eye, LayoutDashboard, ReceiptText, Users, Tag, ShieldCheck, Menu, Settings, ShoppingBag
+  Pencil, Shield, Eye, EyeOff, LayoutDashboard, ReceiptText, Users, Tag, ShieldCheck, Menu, Settings, ShoppingBag
 } from 'lucide-react'
 import { api, getToken, setToken, setOnUnauthorized } from './api'
 import { Avatar, EditorAvatar, avatarPadrao, parseAvatar, serializeAvatar } from './avatar'
@@ -43,17 +43,62 @@ const PERM = {
   PERFIS_GERENCIAR: 'perfis.gerenciar'
 }
 
-function Coxinha({ size = 64 }) {
+function Coxinha({ size = 64, tapandoOlhos, espiando, triste }) {
+  const comMaos = tapandoOlhos !== undefined || espiando !== undefined
+  const cls = 'coxinha-svg' + (triste ? ' triste' : espiando ? ' curiando' : (tapandoOlhos ? ' tapando' : ''))
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64">
+    <svg width={size} height={size} viewBox="0 0 64 64" className={cls}>
       <path d="M32 4C24 14 8 30 8 44c0 10 10 16 24 16s24-6 24-16C56 30 40 14 32 4z" fill="#f5b544" stroke="#c9852a" strokeWidth="2.5" />
       <path d="M20 40c4 2 8 1 10-1" stroke="#fff6" strokeWidth="3" fill="none" strokeLinecap="round" />
-      <circle cx="24" cy="40" r="2.6" fill="#3a2216" />
-      <circle cx="40" cy="40" r="2.6" fill="#3a2216" />
-      <path d="M27 46c3 3 7 3 10 0" stroke="#3a2216" strokeWidth="2.4" fill="none" strokeLinecap="round" />
-      <ellipse cx="19" cy="46" rx="3.5" ry="2" fill="#ff8a6b" opacity=".7" />
-      <ellipse cx="45" cy="46" rx="3.5" ry="2" fill="#ff8a6b" opacity=".7" />
+      {triste && (
+        <>
+          <path d="M19 36l6-2" stroke="#3a2216" strokeWidth="2" strokeLinecap="round" />
+          <path d="M45 36l-6-2" stroke="#3a2216" strokeWidth="2" strokeLinecap="round" />
+        </>
+      )}
+      <circle cx="24" cy="40" r="2.6" fill="#3a2216" className="coxinha-olho esq" />
+      <circle cx="40" cy="40" r="2.6" fill="#3a2216" className="coxinha-olho dir" />
+      {triste ? (
+        <>
+          <path d="M27 49c3-3 7-3 10 0" stroke="#3a2216" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+          <path className="coxinha-lagrima" d="M22 43c-1.8 2.4-2.4 4.2-1.2 5.4a2.2 2.2 0 0 0 3.2 0c1.2-1.2.4-3-2-5.4z" fill="#65c9ff" />
+        </>
+      ) : (
+        <path d="M27 46c3 3 7 3 10 0" stroke="#3a2216" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+      )}
+      <ellipse cx="19" cy="46" rx="3.5" ry="2" fill="#ff8a6b" opacity={tapandoOlhos || espiando ? '.95' : '.7'} />
+      <ellipse cx="45" cy="46" rx="3.5" ry="2" fill="#ff8a6b" opacity={tapandoOlhos || espiando ? '.95' : '.7'} />
+      {comMaos && !triste && (
+        <>
+          <g className="coxinha-mao esq">
+            <path d="M11 45c2-7 8-10 15-8 3 1 4 4 3 7-1 3-5 4-9 4-5 0-9-1-9-3z" fill="#f0a835" stroke="#c9852a" strokeWidth="2.2" strokeLinejoin="round" />
+            <path d="M21 38l-1 6M25 39l-1 5" stroke="#c9852a" strokeWidth="1.6" strokeLinecap="round" />
+          </g>
+          <g className="coxinha-mao dir">
+            <path d="M53 45c-2-7-8-10-15-8-3 1-4 4-3 7 1 3 5 4 9 4 5 0 9-1 9-3z" fill="#f0a835" stroke="#c9852a" strokeWidth="2.2" strokeLinejoin="round" />
+            <path d="M43 38l1 6M39 39l1 5" stroke="#c9852a" strokeWidth="1.6" strokeLinecap="round" />
+          </g>
+        </>
+      )}
     </svg>
+  )
+}
+
+function InputSenha({ mostrar, onToggleMostrar, ...props }) {
+  return (
+    <div className="campo-senha">
+      <input type={mostrar ? 'text' : 'password'} {...props} />
+      <button
+        type="button"
+        className="btn-olho"
+        tabIndex={-1}
+        title={mostrar ? 'Ocultar senha' : 'Visualizar senha'}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onToggleMostrar}
+      >
+        {mostrar ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </div>
   )
 }
 
@@ -299,6 +344,9 @@ export default function App() {
 function TelaLogin({ onLogin, avisar }) {
   const [login, setLogin] = useState('')
   const [senha, setSenha] = useState('')
+  const [tapando, setTapando] = useState(false)
+  const [mostrarSenha, setMostrarSenha] = useState(false)
+  const [esqueceu, setEsqueceu] = useState(false)
   const [entrando, setEntrando] = useState(false)
 
   const entrar = async (e) => {
@@ -321,14 +369,31 @@ function TelaLogin({ onLogin, avisar }) {
       ))}
       <div className="login-card">
         <div className="login-topo">
-          <Coxinha size={72} />
+          <Coxinha size={82} tapandoOlhos={tapando} espiando={mostrarSenha} />
           <h1>Dívidas de Salgados</h1>
           <p>Entre para acompanhar salgados e chocolates 🥟🍫</p>
         </div>
         <form className="coluna" onSubmit={entrar}>
           <label>Login<input type="text" value={login} onChange={(e) => setLogin(e.target.value)} placeholder="seu.login" required autoFocus /></label>
-          <label>Senha<input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="••••••••" required /></label>
-          <button className="grande" style={{ justifyContent: 'center', marginTop: 6 }} disabled={entrando}>
+          <label>
+            Senha
+            <InputSenha
+              value={senha}
+              mostrar={mostrarSenha}
+              onToggleMostrar={() => setMostrarSenha((v) => !v)}
+              onChange={(e) => setSenha(e.target.value)}
+              onFocus={() => setTapando(true)}
+              onBlur={() => setTapando(false)}
+              placeholder="••••••••"
+              required
+            />
+          </label>
+          <div style={{ textAlign: 'right', marginTop: -8 }}>
+            <button type="button" className="link-esqueceu" onClick={() => setEsqueceu(true)}>
+              Esqueceu a senha?
+            </button>
+          </div>
+          <button className="grande" style={{ justifyContent: 'center', marginTop: 2 }} disabled={entrando}>
             {entrando ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
@@ -336,6 +401,20 @@ function TelaLogin({ onLogin, avisar }) {
           Admin padrão: <code>admin</code> / <code>Admin@123</code>
         </div>
       </div>
+
+      {esqueceu && (
+        <Modal peq titulo="Esqueceu a senha? 😢" onClose={() => setEsqueceu(false)}
+          rodape={<button onClick={() => setEsqueceu(false)}>Entendi, vou procurar o admin</button>}>
+          <div className="pegadinha-box">
+            <Coxinha size={116} triste />
+            <h4>Poxa... não posso fazer nada! 🥺</h4>
+            <p>
+              Eu sou só uma coxinha! Não tenho acesso às senhas por aqui.
+              Você vai precisar <b>procurar um administrador</b> para redefinir sua senha.
+            </p>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
@@ -344,6 +423,8 @@ function TelaPrimeiroAcesso({ usuario, exec, avisar, onConcluido, onSair }) {
   const [senhaAtual, setSenhaAtual] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
   const [confirmacao, setConfirmacao] = useState('')
+  const [tapando, setTapando] = useState(false)
+  const [mostrar, setMostrar] = useState(false)
   const [salvando, setSalvando] = useState(false)
 
   const salvar = async (e) => {
@@ -365,14 +446,14 @@ function TelaPrimeiroAcesso({ usuario, exec, avisar, onConcluido, onSair }) {
       ))}
       <div className="login-card">
         <div className="login-topo">
-          <Coxinha size={64} />
+          <Coxinha size={76} tapandoOlhos={tapando} espiando={mostrar} />
           <h1>Primeiro acesso 🔐</h1>
           <p>Olá, <b>{usuario.nome}</b>! Por segurança, defina sua nova senha para continuar.</p>
         </div>
         <form className="coluna" onSubmit={salvar}>
-          <label>Senha provisória (atual)<input type="password" value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} required autoFocus /></label>
-          <label>Nova senha (mín. 6 caracteres)<input type="password" minLength={6} value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} required /></label>
-          <label>Confirmar nova senha<input type="password" minLength={6} value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} required /></label>
+          <label>Senha provisória (atual)<InputSenha mostrar={mostrar} onToggleMostrar={() => setMostrar((v) => !v)} value={senhaAtual} onChange={(e) => setSenhaAtual(e.target.value)} onFocus={() => setTapando(true)} onBlur={() => setTapando(false)} required autoFocus /></label>
+          <label>Nova senha (mín. 6 caracteres)<InputSenha mostrar={mostrar} onToggleMostrar={() => setMostrar((v) => !v)} minLength={6} value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} onFocus={() => setTapando(true)} onBlur={() => setTapando(false)} required /></label>
+          <label>Confirmar nova senha<InputSenha mostrar={mostrar} onToggleMostrar={() => setMostrar((v) => !v)} minLength={6} value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} onFocus={() => setTapando(true)} onBlur={() => setTapando(false)} required /></label>
           <button className="grande" style={{ justifyContent: 'center', marginTop: 6 }} disabled={salvando}>
             {salvando ? 'Salvando...' : 'Salvar nova senha e entrar'}
           </button>
