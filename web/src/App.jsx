@@ -613,9 +613,10 @@ function Kpis({ dividas, usuarios }) {
   const salgadosAbertos = abertas.filter((d) => d.tipo === 'CentoSalgado').length
   const chocolatesAbertos = abertas.filter((d) => d.tipo === 'CaixaChocolate').length
   const quitadas = dividas.filter((d) => d.status === 'Quitada')
-  const salgadosPagos = quitadas.filter((d) => d.tipo === 'CentoSalgado').length
-  const chocolatesPagos = quitadas.filter((d) => d.tipo === 'CaixaChocolate').length
-  const media = quitadas.length ? Math.round(quitadas.reduce((a, d) => a + d.dias, 0) / quitadas.length) : 0
+  const salgadosQuitados = quitadas.filter((d) => d.tipo === 'CentoSalgado')
+  const chocolatesQuitados = quitadas.filter((d) => d.tipo === 'CaixaChocolate')
+  const mediaSalgado = salgadosQuitados.length ? Math.round(salgadosQuitados.reduce((a, d) => a + d.dias, 0) / salgadosQuitados.length) : 0
+  const mediaChocolate = chocolatesQuitados.length ? Math.round(chocolatesQuitados.reduce((a, d) => a + d.dias, 0) / chocolatesQuitados.length) : 0
   const ativos = usuarios.filter((u) => u.ativo)
   const limpos = ativos.filter((u) => u.dividasAbertas === 0).length
   const itens = [
@@ -631,13 +632,21 @@ function Kpis({ dividas, usuarios }) {
     [
       'Pagos (salgados / chocolates)',
       <span className="kpi-duplo">
-        <span title="Centos de salgados pagos">🥟 {salgadosPagos}</span>
-        <span title="Caixas de chocolate pagas">🍫 {chocolatesPagos}</span>
+        <span title="Centos de salgados pagos">🥟 {salgadosQuitados.length}</span>
+        <span title="Caixas de chocolate pagas">🍫 {chocolatesQuitados.length}</span>
       </span>,
       '🎉',
       'k-choco'
     ],
-    ['Média para quitar', `${media} dias`, '⏰', 'k-amarelo'],
+    [
+      'Média para quitar (dias)',
+      <span className="kpi-duplo">
+        <span title="Média em dias para quitar salgados">🥟 {mediaSalgado}d</span>
+        <span title="Média em dias para quitar chocolates">🍫 {mediaChocolate}d</span>
+      </span>,
+      '⏰',
+      'k-amarelo'
+    ],
     ['Pessoas sem dívida', `${limpos}/${ativos.length}`, '😇', 'k-coral']
   ]
   return (
