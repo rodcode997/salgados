@@ -166,3 +166,16 @@ public class UsuariosController(IUsuarioService service) : ControllerBase
         return NoContent();
     }
 }
+
+[ApiController]
+[Route("api/configuracoes")]
+[Authorize]
+public class ConfiguracoesController(IConfiguracaoService service) : ControllerBase
+{
+    [HttpGet]
+    public Task<ConfiguracaoDto> Obter() => service.ObterAsync();
+
+    [HttpPut]
+    [Authorize(Policy = PermissoesCodigos.PerfisGerenciar)]
+    public Task<ConfiguracaoDto> Atualizar(ConfiguracaoInput input) => service.AtualizarAsync(input);
+}

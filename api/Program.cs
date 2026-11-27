@@ -21,6 +21,7 @@ builder.Services.AddScoped<IDividaRepository, DividaRepository>();
 builder.Services.AddScoped<IPermissaoRepository, PermissaoRepository>();
 builder.Services.AddScoped<IPerfilRepository, PerfilRepository>();
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+builder.Services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
 
 builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.AddScoped<IMotivoService, MotivoService>();
@@ -28,6 +29,7 @@ builder.Services.AddScoped<IDividaService, DividaService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPerfilService, PerfilService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
+builder.Services.AddScoped<IConfiguracaoService, ConfiguracaoService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "SalgadosApp-ChaveSecretaSuperSegura-2026-DevOnly!";
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "Salgados.Api";
@@ -87,6 +89,17 @@ using (var scope = app.Services.CreateScope())
             alter.CommandText = "ALTER TABLE Usuarios ADD COLUMN Avatar TEXT;";
             alter.ExecuteNonQuery();
         }
+    }
+    using (var cfgCmd = conn.CreateCommand())
+    {
+        cfgCmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS Configuracoes (
+                Id INTEGER NOT NULL CONSTRAINT PK_Configuracoes PRIMARY KEY,
+                ExigirAceiteDivida INTEGER NOT NULL DEFAULT 1
+            );
+            INSERT OR IGNORE INTO Configuracoes (Id, ExigirAceiteDivida) VALUES (1, 1);
+            """;
+        cfgCmd.ExecuteNonQuery();
     }
     conn.Close();
 

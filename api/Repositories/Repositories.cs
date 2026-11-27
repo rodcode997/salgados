@@ -149,3 +149,26 @@ public class UsuarioRepository(AppDbContext db) : IUsuarioRepository
     public async Task AdicionarAsync(Usuario u) => await db.Usuarios.AddAsync(u);
     public Task SalvarAsync() => db.SaveChangesAsync();
 }
+
+public interface IConfiguracaoRepository
+{
+    Task<ConfiguracaoSistema> ObterAsync();
+    Task SalvarAsync();
+}
+
+public class ConfiguracaoRepository(AppDbContext db) : IConfiguracaoRepository
+{
+    public async Task<ConfiguracaoSistema> ObterAsync()
+    {
+        var cfg = await db.Configuracoes.FirstOrDefaultAsync(c => c.Id == 1);
+        if (cfg is null)
+        {
+            cfg = new ConfiguracaoSistema { Id = 1, ExigirAceiteDivida = true };
+            await db.Configuracoes.AddAsync(cfg);
+            await db.SaveChangesAsync();
+        }
+        return cfg;
+    }
+
+    public Task SalvarAsync() => db.SaveChangesAsync();
+}

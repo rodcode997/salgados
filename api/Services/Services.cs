@@ -146,7 +146,11 @@ public interface IDividaService
     Task<DividaDto> RecusarPagamentoAsync(int pagamentoId, MensagemInput input, int avaliadorId);
 }
 
-public class DividaService(IDividaRepository repo, IUsuarioRepository usuarios, IMotivoRepository motivos) : IDividaService
+public class DividaService(
+    IDividaRepository repo,
+    IUsuarioRepository usuarios,
+    IMotivoRepository motivos,
+    IConfiguracaoRepository configuracoes) : IDividaService
 {
     public async Task<List<DividaDto>> ListarAsync(int? usuarioId, StatusDivida? status) =>
         (await repo.ListarAsync(usuarioId, status)).Select(Mapper.ToDto).ToList();
@@ -160,8 +164,9 @@ public class DividaService(IDividaRepository repo, IUsuarioRepository usuarios, 
         var motivo = await motivos.ObterAsync(input.MotivoId) ?? throw new RegraNegocioException("Motivo inválido.");
         if (!motivo.Ativo) throw new RegraNegocioException("Motivo inativo.");
 
+        var config = await configuracoes.ObterAsync();
         var agora = DateTime.Now;
-        var autoAceita = input.UsuarioId == criadoPorId;
+        var autoAceita = !config.ExigirAceiteDivida || input.UsuarioId == criadoPorId;
         var d = new Divida
         {
             UsuarioId = input.UsuarioId,
@@ -186,7 +191,9 @@ public class DividaService(IDividaRepository repo, IUsuarioRepository usuarios, 
             {
                 UsuarioId = criadoPorId,
                 Tipo = TipoInteracao.Aceita,
-                Mensagem = "Aceite automático (cadastrada pelo próprio devedor).",
+                Mensagem = !config.ExigirAceiteDivida
+                    ? "Lançada diretamente em aberto (aceite de dívidas desativado)."
+                    : "Aceite automático (cadastrada pelo próprio devedor).",
                 CriadoEm = agora
             });
         }
@@ -585,5 +592,28 @@ public class UsuarioService(IUsuarioRepository repo, IPerfilRepository perfis, I
         var u = await repo.ObterAsync(id) ?? throw new NaoEncontradoException("Usuário não encontrado.");
         u.Ativo = ativo;
         await repo.SalvarAsync();
+    }
+}
+
+public interface IConfiguracaoService
+{
+    Task<ConfiguracaoDto> ObterAsync();
+    Task<ConfiguracaoDto> AtualizarAsync(ConfiguracaoInput input);
+}
+
+public class ConfiguracaoService(IConfiguracaoRepository repo) : IConfiguracaoService
+{
+    public async Task<ConfiguracaoDto> ObterAsync()
+    {
+        var cfg = await repo.ObterAsync();
+        return new ConfiguracaoDto(cfg.ExigirAceiteDivida);
+    }
+
+    public async Task<ConfiguracaoDto> AtualizarAsync(ConfiguracaoInput input)
+    {
+        var cfg = await repo.ObterAsync();
+        cfg.ExigirAceiteDivida = input.ExigirAceiteDivida;
+        await repo.SalvarAsync();
+        return new ConfiguracaoDto(cfg.ExigirAceiteDivida);
     }
 }

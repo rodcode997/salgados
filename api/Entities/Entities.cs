@@ -161,3 +161,9 @@ public class Usuario
     public Perfil? Perfil { get; set; }
     public List<Divida> Dividas { get; set; } = new();
 }
+
+public class ConfiguracaoSistema
+{
+    public int Id { get; set; } = 1;
+    public bool ExigirAceiteDivida { get; set; } = true;
+}

@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Search, X, CheckCircle2, AlertCircle, ChevronRight, LogOut, KeyRound, Pencil, Shield, Eye } from 'lucide-react'
+import {
+  Plus, Search, X, CheckCircle2, AlertCircle, ChevronRight, LogOut, KeyRound,
+  Pencil, Shield, Eye, LayoutDashboard, ReceiptText, Users, Tag, ShieldCheck, Menu, Settings
+} from 'lucide-react'
 import { api, getToken, setToken, setOnUnauthorized } from './api'
 import { Avatar, EditorAvatar, avatarPadrao, parseAvatar, serializeAvatar } from './avatar'
 
@@ -91,6 +94,7 @@ export default function App() {
   const [novaDivida, setNovaDivida] = useState(false)
   const [modalSenha, setModalSenha] = useState(false)
   const [modalAvatar, setModalAvatar] = useState(false)
+  const [menuAberto, setMenuAberto] = useState(false)
   const [versaoAvatar, setVersaoAvatar] = useState(0)
   const [toast, setToast] = useState(null)
 
@@ -131,11 +135,12 @@ export default function App() {
   const abas = useMemo(() => {
     if (!usuario) return []
     const lista = []
-    if (tem(PERM.DIVIDAS_VER) && tem(PERM.USUARIOS_VER)) lista.push(['painel', 'Painel'])
-    if (tem(PERM.DIVIDAS_VER)) lista.push(['dividas', 'Dívidas'])
-    if (tem(PERM.USUARIOS_VER)) lista.push(['usuarios', 'Usuários'])
-    if (tem(PERM.MOTIVOS_VER)) lista.push(['motivos', 'Motivos'])
-    if (tem(PERM.PERFIS_GERENCIAR)) lista.push(['perfis', 'Perfis'])
+    if (tem(PERM.DIVIDAS_VER) && tem(PERM.USUARIOS_VER)) lista.push(['painel', 'Painel', LayoutDashboard])
+    if (tem(PERM.DIVIDAS_VER)) lista.push(['dividas', 'Dívidas', ReceiptText])
+    if (tem(PERM.USUARIOS_VER)) lista.push(['usuarios', 'Usuários', Users])
+    if (tem(PERM.MOTIVOS_VER)) lista.push(['motivos', 'Motivos', Tag])
+    if (tem(PERM.PERFIS_GERENCIAR)) lista.push(['perfis', 'Perfis', ShieldCheck])
+    if (tem(PERM.PERFIS_GERENCIAR)) lista.push(['configuracoes', 'Configurações', Settings])
     return lista
   }, [usuario])
 
@@ -156,53 +161,94 @@ export default function App() {
     )
   }
 
-  const abrirNova = () => { setPag('dividas'); setNovaDivida(true) }
+  const abrirNova = () => { setPag('dividas'); setNovaDivida(true); setMenuAberto(false) }
+  const irPara = (k) => { setPag(k); setMenuAberto(false) }
 
   return (
-    <>
-      <header className="topo">
-        {DECO.map(([e, l, t, r], i) => (
-          <span key={i} className="deco" style={{ left: l, top: t, transform: `rotate(${r}deg)` }}>{e}</span>
-        ))}
-        <div className="topo-in">
-          <div className="marca"><Coxinha size={52} /><h1>Dívidas de Salgados</h1></div>
-          <nav className="abas">
-            {abas.map(([k, t]) => (
-              <button key={k} className={pag === k ? 'ativo' : ''} onClick={() => setPag(k)}>{t}</button>
-            ))}
-          </nav>
-          <div className="topo-acoes">
-            {tem(PERM.DIVIDAS_CRIAR) && <button className="grande" onClick={abrirNova}><Plus size={18} />Nova dívida</button>}
-            <div className="user-pill">
-              <button type="button" className="avatar-btn" title="Personalizar avatar" onClick={() => setModalAvatar(true)}>
-                <Avatar nome={usuario.nome} avatar={usuario.avatar} />
-              </button>
-              <div className="u-info">
-                <b>{usuario.nome}</b>
-                <small>{usuario.perfil}</small>
-              </div>
-              <button className="icone" title="Alterar senha" onClick={() => setModalSenha(true)}><KeyRound size={17} /></button>
-              <button className="icone" title="Sair" onClick={sair}><LogOut size={17} /></button>
+    <div className="app-shell">
+      {menuAberto && <div className="sidebar-backdrop" onClick={() => setMenuAberto(false)} />}
+
+      <aside className={'sidebar' + (menuAberto ? ' aberta' : '')}>
+        <div className="sidebar-topo">
+          <div className="marca">
+            <Coxinha size={44} />
+            <div>
+              <h1>Salgados</h1>
+              <small>Controle de dívidas 🥟🍫</small>
             </div>
           </div>
+          <button type="button" className="icone sidebar-fechar" onClick={() => setMenuAberto(false)} aria-label="Fechar menu">
+            <X size={20} />
+          </button>
         </div>
-      </header>
 
-      <div className="pagina">
-        {pag === 'painel' && <Painel key={versaoAvatar} exec={exec} irPara={setPag} usuarioLogado={usuario} tem={tem} />}
-        {pag === 'dividas' && <Dividas key={versaoAvatar} exec={exec} nova={novaDivida} setNova={setNovaDivida} tem={tem} usuarioLogado={usuario} />}
-        {pag === 'usuarios' && (
-          <Usuarios
-            key={versaoAvatar}
-            exec={exec}
-            tem={tem}
-            usuarioLogado={usuario}
-            onUpdateSessao={(u) => setUsuario((prev) => (prev && prev.id === u.id ? { ...prev, nome: u.nome, email: u.email, avatar: u.avatar } : prev))}
-          />
+        {tem(PERM.DIVIDAS_CRIAR) && (
+          <button className="grande sidebar-cta" onClick={abrirNova}>
+            <Plus size={18} />Nova dívida
+          </button>
         )}
-        {pag === 'motivos' && <Motivos exec={exec} tem={tem} />}
-        {pag === 'perfis' && <Perfis exec={exec} />}
-        {!abas.length && <div className="card"><Vazio texto="Seu perfil não possui permissões de visualização." emo="🔒" /></div>}
+
+        <nav className="sidebar-nav">
+          {abas.map(([k, t, Icon]) => (
+            <button key={k} className={pag === k ? 'ativo' : ''} onClick={() => irPara(k)}>
+              <Icon size={19} />
+              <span>{t}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-user">
+          <div className="sidebar-user-top">
+            <button type="button" className="avatar-btn" title="Personalizar avatar" onClick={() => { setModalAvatar(true); setMenuAberto(false) }}>
+              <Avatar nome={usuario.nome} avatar={usuario.avatar} />
+            </button>
+            <div className="u-info">
+              <b>{usuario.nome}</b>
+              <small>{usuario.perfil}</small>
+            </div>
+          </div>
+          <div className="sidebar-user-acoes">
+            <button type="button" className="sec peq" title="Personalizar avatar" onClick={() => { setModalAvatar(true); setMenuAberto(false) }}>
+              Avatar
+            </button>
+            <button type="button" className="icone" title="Alterar senha" onClick={() => { setModalSenha(true); setMenuAberto(false) }}>
+              <KeyRound size={17} />
+            </button>
+            <button type="button" className="icone" title="Sair" onClick={sair}>
+              <LogOut size={17} />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <div className="conteudo">
+        <header className="mobile-bar">
+          <button type="button" className="icone" onClick={() => setMenuAberto(true)} aria-label="Abrir menu">
+            <Menu size={22} />
+          </button>
+          <div className="marca"><Coxinha size={34} /><h1>Salgados</h1></div>
+          {tem(PERM.DIVIDAS_CRIAR) && (
+            <button className="peq" onClick={abrirNova}><Plus size={16} />Nova</button>
+          )}
+        </header>
+
+        <main className="pagina">
+          {pag === 'painel' && <Painel key={versaoAvatar} exec={exec} irPara={irPara} usuarioLogado={usuario} tem={tem} />}
+          {pag === 'dividas' && <Dividas key={versaoAvatar} exec={exec} nova={novaDivida} setNova={setNovaDivida} tem={tem} usuarioLogado={usuario} />}
+          {pag === 'usuarios' && (
+            <Usuarios
+              key={versaoAvatar}
+              exec={exec}
+              tem={tem}
+              usuarioLogado={usuario}
+              onUpdateSessao={(u) => setUsuario((prev) => (prev && prev.id === u.id ? { ...prev, nome: u.nome, email: u.email, avatar: u.avatar } : prev))}
+            />
+          )}
+          {pag === 'motivos' && <Motivos exec={exec} tem={tem} />}
+          {pag === 'perfis' && <Perfis exec={exec} />}
+          {pag === 'configuracoes' && <Configuracoes exec={exec} />}
+          {!abas.length && <div className="card"><Vazio texto="Seu perfil não possui permissões de visualização." emo="🔒" /></div>}
+        </main>
       </div>
 
       {modalSenha && <ModalAlterarSenha exec={exec} onClose={() => setModalSenha(false)} />}
@@ -220,7 +266,7 @@ export default function App() {
           {toast.tipo === 'erro' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}{toast.msg}
         </div>
       )}
-    </>
+    </div>
   )
 }
 
@@ -305,14 +351,23 @@ function ModalAlterarAvatar({ usuario, exec, onSaved, onClose }) {
 
 function Kpis({ dividas, usuarios }) {
   const abertas = dividas.filter((d) => d.status === 'Aceita').length
-  const pago = dividas.filter((d) => d.status === 'Quitada').reduce((a, d) => a + (d.valorPago || 0), 0)
   const quitadas = dividas.filter((d) => d.status === 'Quitada')
+  const salgadosPagos = quitadas.filter((d) => d.tipo === 'CentoSalgado').length
+  const chocolatesPagos = quitadas.filter((d) => d.tipo === 'CaixaChocolate').length
   const media = quitadas.length ? Math.round(quitadas.reduce((a, d) => a + d.dias, 0) / quitadas.length) : 0
   const ativos = usuarios.filter((u) => u.ativo)
   const limpos = ativos.filter((u) => u.dividasAbertas === 0).length
   const itens = [
     ['Dívidas em aberto', abertas, '🥟', 'k-laranja'],
-    ['Total pago', fmtValor(pago), '🍫', 'k-choco'],
+    [
+      'Pagos (salgados / chocolates)',
+      <span className="kpi-duplo">
+        <span title="Centos de salgados pagos">🥟 {salgadosPagos}</span>
+        <span title="Caixas de chocolate pagas">🍫 {chocolatesPagos}</span>
+      </span>,
+      '🎉',
+      'k-choco'
+    ],
     ['Média para quitar', `${media} dias`, '⏰', 'k-amarelo'],
     ['Pessoas sem dívida', `${limpos}/${ativos.length}`, '😇', 'k-coral']
   ]
@@ -1135,5 +1190,67 @@ function Perfis({ exec }) {
         </Modal>
       )}
     </>
+  )
+}
+
+function Configuracoes({ exec }) {
+  const [cfg, setCfg] = useState(null)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    exec(api.configuracoes).then((r) => r && setCfg(r))
+  }, [])
+
+  const alternarAceite = async (ativo) => {
+    setSalvando(true)
+    const r = await exec(
+      () => api.atualizarConfiguracoes({ exigirAceiteDivida: ativo }),
+      ativo ? 'Aceite de dívidas ativado!' : 'Aceite desativado — dívidas irão direto em aberto!'
+    )
+    if (r) setCfg(r)
+    setSalvando(false)
+  }
+
+  return (
+    <div className="card">
+      <div className="card-cab">
+        <div>
+          <h3>Configurações</h3>
+          <p>Ajuste regras e comportamentos do sistema</p>
+        </div>
+      </div>
+      <div className="card-corpo">
+        {!cfg ? (
+          <Vazio texto="Carregando configurações..." emo="⚙️" />
+        ) : (
+          <div className="config-lista">
+            <div className="config-item">
+              <div className="config-info">
+                <div className="config-titulo">
+                  <h4>Exigir aceite de dívidas</h4>
+                  <span className={'badge ' + (cfg.exigirAceiteDivida ? 'b-quitada' : 'b-neutro')}>
+                    {cfg.exigirAceiteDivida ? 'Ativado' : 'Desativado'}
+                  </span>
+                </div>
+                <p>
+                  {cfg.exigirAceiteDivida
+                    ? 'Quando ativado, novas dívidas cadastradas para outra pessoa ficam aguardando aceite (o devedor pode aceitar ou contestar).'
+                    : 'Quando desativado, novas dívidas são lançadas diretamente como "Em aberto", sem etapa de aceite.'}
+                </p>
+              </div>
+              <label className="switch" aria-label="Exigir aceite de dívidas">
+                <input
+                  type="checkbox"
+                  checked={cfg.exigirAceiteDivida}
+                  disabled={salvando}
+                  onChange={(e) => alternarAceite(e.target.checked)}
+                />
+                <span className="switch-trilha" />
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

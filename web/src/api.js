@@ -65,5 +65,9 @@ export const api = {
   perfis: () => req('/perfis'),
   criarPerfil: (d) => req('/perfis', { method: 'POST', body: d }),
   atualizarPerfil: (id, d) => req(`/perfis/${id}`, { method: 'PUT', body: d }),
-  ativoPerfil: (id, ativo) => req(`/perfis/${id}/ativo/${ativo}`, { method: 'PATCH' })
+  ativoPerfil: (id, ativo) => req(`/perfis/${id}/ativo/${ativo}`, { method: 'PATCH' }),
+
+  // Configurações do sistema
+  configuracoes: () => req('/configuracoes'),
+  atualizarConfiguracoes: (d) => req('/configuracoes', { method: 'PUT', body: d })
 }

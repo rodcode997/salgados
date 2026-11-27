@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Perfil> Perfis => Set<Perfil>();
     public DbSet<PerfilPermissao> PerfilPermissoes => Set<PerfilPermissao>();
     public DbSet<Usuario> Usuarios => Set<Usuario>();
+    public DbSet<ConfiguracaoSistema> Configuracoes => Set<ConfiguracaoSistema>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -124,6 +125,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(u => u.Avatar).HasMaxLength(500);
             e.HasIndex(u => u.Email).IsUnique();
             e.HasOne(u => u.Perfil).WithMany(p => p.Usuarios).HasForeignKey(u => u.PerfilId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<ConfiguracaoSistema>(e =>
+        {
+            e.HasKey(c => c.Id);
+            e.HasData(new ConfiguracaoSistema { Id = 1, ExigirAceiteDivida = true });
         });
     }
 }

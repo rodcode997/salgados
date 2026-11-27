@@ -84,3 +84,6 @@ public record UsuarioDto(
     int DividasAbertas, int TotalDividas, string? Mensagem);
 
 public record SituacaoDto(UsuarioDto Usuario, List<DividaDto> Pendentes, List<DividaDto> Abertas, List<DividaDto> Historico);
+
+public record ConfiguracaoDto(bool ExigirAceiteDivida);
+public record ConfiguracaoInput(bool ExigirAceiteDivida);
