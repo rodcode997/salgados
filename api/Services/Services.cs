@@ -88,12 +88,12 @@ public static class Mapper
         var abertas = u.Dividas.Count(d => d.Status == StatusDivida.Aceita);
         var totalValidas = u.Dividas.Count(d => d.Status is StatusDivida.Aceita or StatusDivida.Quitada);
         return new UsuarioDto(
-            u.Id, u.Nome, u.Email, u.Avatar, u.Ativo, u.CriadoEm, u.PerfilId, u.Perfil?.Nome ?? "",
+            u.Id, u.Nome, u.Login, u.DataNascimento, u.Avatar, u.Ativo, u.CriadoEm, u.PerfilId, u.Perfil?.Nome ?? "",
             abertas, totalValidas, abertas == 0 ? MensagemParabens : null);
     }
 
     public static UsuarioSessaoDto ToSessaoDto(Usuario u) => new(
-        u.Id, u.Nome, u.Email, u.Avatar, u.PerfilId, u.Perfil?.Nome ?? "",
+        u.Id, u.Nome, u.Login, u.Avatar, u.PerfilId, u.Perfil?.Nome ?? "",
         u.Perfil?.Permissoes.Where(pp => pp.Permissao != null).Select(pp => pp.Permissao!.Codigo).Distinct().ToList() ?? []);
 }
 
@@ -373,16 +373,16 @@ public class AuthService(IUsuarioRepository usuarios, IPasswordHasher<Usuario> h
 {
     public async Task<LoginDto> LoginAsync(LoginInput input)
     {
-        var email = input.Email.Trim().ToLowerInvariant();
-        var u = await usuarios.ObterPorEmailAsync(email)
-            ?? throw new NaoAutorizadoException("E-mail ou senha inválidos.");
+        var login = input.Login.Trim().ToLowerInvariant();
+        var u = await usuarios.ObterPorLoginAsync(login)
+            ?? throw new NaoAutorizadoException("Login ou senha inválidos.");
 
         if (!u.Ativo) throw new NaoAutorizadoException("Usuário inativo. Procure um administrador.");
         if (u.Perfil is null || !u.Perfil.Ativo) throw new NaoAutorizadoException("Perfil do usuário está inativo.");
 
         var verif = hasher.VerifyHashedPassword(u, u.SenhaHash, input.Senha);
         if (verif == PasswordVerificationResult.Failed)
-            throw new NaoAutorizadoException("E-mail ou senha inválidos.");
+            throw new NaoAutorizadoException("Login ou senha inválidos.");
 
         var sessao = Mapper.ToSessaoDto(u);
         var horas = config.GetValue("Jwt:ExpiraHoras", 12);
@@ -393,7 +393,7 @@ public class AuthService(IUsuarioRepository usuarios, IPasswordHasher<Usuario> h
             new(JwtRegisteredClaimNames.Sub, u.Id.ToString()),
             new(ClaimTypes.NameIdentifier, u.Id.ToString()),
             new(ClaimTypes.Name, u.Nome),
-            new(ClaimTypes.Email, u.Email),
+            new("login", u.Login),
             new(ClaimTypes.Role, sessao.Perfil)
         };
         foreach (var perm in sessao.Permissoes)
@@ -521,7 +521,11 @@ public interface IUsuarioService
     Task AlterarAtivoAsync(int id, bool ativo, int usuarioLogadoId);
 }
 
-public class UsuarioService(IUsuarioRepository repo, IPerfilRepository perfis, IPasswordHasher<Usuario> hasher) : IUsuarioService
+public class UsuarioService(
+    IUsuarioRepository repo,
+    IPerfilRepository perfis,
+    IPasswordHasher<Usuario> hasher,
+    IAniversarioService aniversarios) : IUsuarioService
 {
     public async Task<List<UsuarioDto>> ListarAsync() =>
         (await repo.ListarAsync()).Select(Mapper.ToDto).ToList();
@@ -539,9 +543,13 @@ public class UsuarioService(IUsuarioRepository repo, IPerfilRepository perfis, I
 
     public async Task<UsuarioDto> CriarAsync(UsuarioCreateInput input)
     {
-        var email = input.Email.Trim().ToLowerInvariant();
-        if (await repo.ObterPorEmailAsync(email) != null)
-            throw new RegraNegocioException("Já existe um usuário com este e-mail.");
+        var login = input.Login.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(login))
+            throw new RegraNegocioException("Login inválido.");
+        if (await repo.ObterPorLoginAsync(login) != null)
+            throw new RegraNegocioException("Já existe um usuário com este login.");
+        if (input.DataNascimento.Date > DateTime.Today)
+            throw new RegraNegocioException("Data de nascimento não pode ser futura.");
 
         var perfil = await perfis.ObterAsync(input.PerfilId) ?? throw new RegraNegocioException("Perfil inválido.");
         if (!perfil.Ativo) throw new RegraNegocioException("Perfil inativo.");
@@ -549,29 +557,37 @@ public class UsuarioService(IUsuarioRepository repo, IPerfilRepository perfis, I
         var u = new Usuario
         {
             Nome = input.Nome.Trim(),
-            Email = email,
+            Login = login,
+            DataNascimento = input.DataNascimento.Date,
             PerfilId = input.PerfilId,
             Avatar = string.IsNullOrWhiteSpace(input.Avatar) ? null : input.Avatar.Trim()
         };
         u.SenhaHash = hasher.HashPassword(u, input.Senha);
         await repo.AdicionarAsync(u);
         await repo.SalvarAsync();
+
+        await aniversarios.ProcessarUsuarioAsync(u.Id);
         return Mapper.ToDto((await repo.ObterAsync(u.Id))!);
     }
 
     public async Task<UsuarioDto> AtualizarAsync(int id, UsuarioUpdateInput input)
     {
         var u = await repo.ObterAsync(id) ?? throw new NaoEncontradoException("Usuário não encontrado.");
-        var email = input.Email.Trim().ToLowerInvariant();
-        var existente = await repo.ObterPorEmailAsync(email);
+        var login = input.Login.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(login))
+            throw new RegraNegocioException("Login inválido.");
+        var existente = await repo.ObterPorLoginAsync(login);
         if (existente != null && existente.Id != id)
-            throw new RegraNegocioException("Já existe outro usuário com este e-mail.");
+            throw new RegraNegocioException("Já existe outro usuário com este login.");
+        if (input.DataNascimento.Date > DateTime.Today)
+            throw new RegraNegocioException("Data de nascimento não pode ser futura.");
 
         var perfil = await perfis.ObterAsync(input.PerfilId) ?? throw new RegraNegocioException("Perfil inválido.");
         if (!perfil.Ativo) throw new RegraNegocioException("Perfil inativo.");
 
         u.Nome = input.Nome.Trim();
-        u.Email = email;
+        u.Login = login;
+        u.DataNascimento = input.DataNascimento.Date;
         u.PerfilId = input.PerfilId;
         u.Avatar = string.IsNullOrWhiteSpace(input.Avatar) ? null : input.Avatar.Trim();
         if (!string.IsNullOrWhiteSpace(input.NovaSenha))
@@ -582,6 +598,7 @@ public class UsuarioService(IUsuarioRepository repo, IPerfilRepository perfis, I
         }
 
         await repo.SalvarAsync();
+        await aniversarios.ProcessarUsuarioAsync(u.Id);
         return Mapper.ToDto((await repo.ObterAsync(u.Id))!);
     }
 
@@ -606,14 +623,149 @@ public class ConfiguracaoService(IConfiguracaoRepository repo) : IConfiguracaoSe
     public async Task<ConfiguracaoDto> ObterAsync()
     {
         var cfg = await repo.ObterAsync();
-        return new ConfiguracaoDto(cfg.ExigirAceiteDivida);
+        return new ConfiguracaoDto(cfg.ExigirAceiteDivida, cfg.TipoDividaAniversario);
     }
 
     public async Task<ConfiguracaoDto> AtualizarAsync(ConfiguracaoInput input)
     {
+        if (!Enum.IsDefined(input.TipoDividaAniversario))
+            throw new RegraNegocioException("Tipo de dívida de aniversário inválido.");
+
         var cfg = await repo.ObterAsync();
         cfg.ExigirAceiteDivida = input.ExigirAceiteDivida;
+        cfg.TipoDividaAniversario = input.TipoDividaAniversario;
         await repo.SalvarAsync();
-        return new ConfiguracaoDto(cfg.ExigirAceiteDivida);
+        return new ConfiguracaoDto(cfg.ExigirAceiteDivida, cfg.TipoDividaAniversario);
+    }
+}
+
+public interface IAniversarioService
+{
+    Task ProcessarHojeAsync();
+    Task ProcessarUsuarioAsync(int usuarioId);
+}
+
+public class AniversarioService(
+    IUsuarioRepository usuarios,
+    IDividaRepository dividas,
+    IMotivoRepository motivos,
+    IConfiguracaoRepository configuracoes) : IAniversarioService
+{
+    private static bool EhAniversarioHoje(DateTime nascimento, DateTime hoje)
+    {
+        if (nascimento.Month == hoje.Month && nascimento.Day == hoje.Day) return true;
+        // Nascidos em 29/02 comemoram em 28/02 em anos não bissextos
+        if (nascimento.Month == 2 && nascimento.Day == 29 && !DateTime.IsLeapYear(hoje.Year) && hoje.Month == 2 && hoje.Day == 28)
+            return true;
+        return false;
+    }
+
+    public async Task ProcessarHojeAsync()
+    {
+        var hoje = DateTime.Today;
+        var ativos = await usuarios.ListarAtivosComNascimentoAsync();
+        var aniversariantes = ativos.Where(u => u.DataNascimento.HasValue && EhAniversarioHoje(u.DataNascimento.Value, hoje)).ToList();
+        if (aniversariantes.Count == 0) return;
+
+        await CriarDividasAniversarioAsync(aniversariantes, hoje);
+    }
+
+    public async Task ProcessarUsuarioAsync(int usuarioId)
+    {
+        var hoje = DateTime.Today;
+        var u = await usuarios.ObterAsync(usuarioId);
+        if (u is null || !u.Ativo || !u.DataNascimento.HasValue || !EhAniversarioHoje(u.DataNascimento.Value, hoje))
+            return;
+
+        await CriarDividasAniversarioAsync([u], hoje);
+    }
+
+    private async Task CriarDividasAniversarioAsync(List<Usuario> aniversariantes, DateTime hoje)
+    {
+        var motivo = await motivos.ObterPorDescricaoAsync("Aniversário") ?? await motivos.ObterAsync(1);
+        if (motivo is null)
+        {
+            motivo = new Motivo { Descricao = "Aniversário", Ativo = true };
+            await motivos.AdicionarAsync(motivo);
+            await motivos.SalvarAsync();
+        }
+
+        var config = await configuracoes.ObterAsync();
+        var admin = await usuarios.ObterPrimeiroAdminAsync();
+        var agora = DateTime.Now;
+        var salvouAlgo = false;
+
+        foreach (var u in aniversariantes)
+        {
+            if (await dividas.ExisteAniversarioNoAnoAsync(u.Id, motivo.Id, hoje.Year))
+                continue;
+
+            var criadoPorId = admin?.Id ?? u.Id;
+            var autoAceita = !config.ExigirAceiteDivida || criadoPorId == u.Id;
+            var d = new Divida
+            {
+                UsuarioId = u.Id,
+                MotivoId = motivo.Id,
+                Tipo = config.TipoDividaAniversario,
+                DataAquisicao = hoje,
+                Observacao = "🎂 Feliz aniversário! Dívida gerada automaticamente.",
+                Status = autoAceita ? StatusDivida.Aceita : StatusDivida.PendenteAceite,
+                CriadoPorId = criadoPorId,
+                CriadoEm = agora
+            };
+            d.Interacoes.Add(new DividaInteracao
+            {
+                UsuarioId = criadoPorId,
+                Tipo = TipoInteracao.Criada,
+                Mensagem = d.Observacao,
+                CriadoEm = agora
+            });
+            if (autoAceita)
+            {
+                d.Interacoes.Add(new DividaInteracao
+                {
+                    UsuarioId = criadoPorId,
+                    Tipo = TipoInteracao.Aceita,
+                    Mensagem = !config.ExigirAceiteDivida
+                        ? "Lançada diretamente em aberto (aceite de dívidas desativado)."
+                        : "Aceite automático (gerada para o próprio usuário).",
+                    CriadoEm = agora
+                });
+            }
+
+            await dividas.AdicionarAsync(d);
+            salvouAlgo = true;
+        }
+
+        if (salvouAlgo)
+            await dividas.SalvarAsync();
+    }
+}
+
+public class AniversarioHostedService(IServiceScopeFactory scopeFactory, ILogger<AniversarioHostedService> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await ExecutarVerificacaoAsync();
+
+        using var timer = new PeriodicTimer(TimeSpan.FromHours(1));
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            await ExecutarVerificacaoAsync();
+        }
+    }
+
+    private async Task ExecutarVerificacaoAsync()
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<IAniversarioService>();
+            await service.ProcessarHojeAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Erro ao processar dívidas automáticas de aniversário.");
+        }
     }
 }

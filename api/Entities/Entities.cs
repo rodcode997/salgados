@@ -152,8 +152,9 @@ public class Usuario
 {
     public int Id { get; set; }
     public string Nome { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
+    public string Login { get; set; } = string.Empty;
     public string SenhaHash { get; set; } = string.Empty;
+    public DateTime? DataNascimento { get; set; }
     public string? Avatar { get; set; }
     public bool Ativo { get; set; } = true;
     public DateTime CriadoEm { get; set; } = DateTime.Now;
@@ -166,4 +167,5 @@ public class ConfiguracaoSistema
 {
     public int Id { get; set; } = 1;
     public bool ExigirAceiteDivida { get; set; } = true;
+    public TipoDivida TipoDividaAniversario { get; set; } = TipoDivida.CentoSalgado;
 }

@@ -30,6 +30,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPerfilService, PerfilService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IConfiguracaoService, ConfiguracaoService>();
+builder.Services.AddScoped<IAniversarioService, AniversarioService>();
+builder.Services.AddHostedService<AniversarioHostedService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "SalgadosApp-ChaveSecretaSuperSegura-2026-DevOnly!";
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "Salgados.Api";
@@ -70,36 +72,74 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
 
-    // Garante coluna Avatar em bancos SQLite já existentes
+    // Garante colunas/tabelas incrementais em bancos SQLite já existentes
     var conn = db.Database.GetDbConnection();
     conn.Open();
     using (var cmd = conn.CreateCommand())
     {
         cmd.CommandText = "PRAGMA table_info(Usuarios);";
-        var temAvatar = false;
+        var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using (var reader = cmd.ExecuteReader())
         {
             while (reader.Read())
-                if (string.Equals(reader.GetString(1), "Avatar", StringComparison.OrdinalIgnoreCase))
-                    temAvatar = true;
+                cols.Add(reader.GetString(1));
         }
-        if (!temAvatar)
+
+        if (cols.Contains("Email") && !cols.Contains("Login"))
+        {
+            using var rename = conn.CreateCommand();
+            rename.CommandText = "ALTER TABLE Usuarios RENAME COLUMN Email TO Login;";
+            rename.ExecuteNonQuery();
+            cols.Add("Login");
+        }
+        if (!cols.Contains("Avatar"))
         {
             using var alter = conn.CreateCommand();
             alter.CommandText = "ALTER TABLE Usuarios ADD COLUMN Avatar TEXT;";
             alter.ExecuteNonQuery();
         }
+        if (!cols.Contains("DataNascimento"))
+        {
+            using var alter = conn.CreateCommand();
+            alter.CommandText = "ALTER TABLE Usuarios ADD COLUMN DataNascimento TEXT;";
+            alter.ExecuteNonQuery();
+        }
+        using var updAdmin = conn.CreateCommand();
+        updAdmin.CommandText = "UPDATE Usuarios SET Login = 'admin' WHERE LOWER(Login) = 'admin@salgados.com' AND NOT EXISTS (SELECT 1 FROM Usuarios WHERE LOWER(Login) = 'admin');";
+        updAdmin.ExecuteNonQuery();
     }
     using (var cfgCmd = conn.CreateCommand())
     {
         cfgCmd.CommandText = """
             CREATE TABLE IF NOT EXISTS Configuracoes (
                 Id INTEGER NOT NULL CONSTRAINT PK_Configuracoes PRIMARY KEY,
-                ExigirAceiteDivida INTEGER NOT NULL DEFAULT 1
+                ExigirAceiteDivida INTEGER NOT NULL DEFAULT 1,
+                TipoDividaAniversario INTEGER NOT NULL DEFAULT 1
             );
-            INSERT OR IGNORE INTO Configuracoes (Id, ExigirAceiteDivida) VALUES (1, 1);
             """;
         cfgCmd.ExecuteNonQuery();
+    }
+    using (var cfgColsCmd = conn.CreateCommand())
+    {
+        cfgColsCmd.CommandText = "PRAGMA table_info(Configuracoes);";
+        var temTipoAniv = false;
+        using (var reader = cfgColsCmd.ExecuteReader())
+        {
+            while (reader.Read())
+                if (string.Equals(reader.GetString(1), "TipoDividaAniversario", StringComparison.OrdinalIgnoreCase))
+                    temTipoAniv = true;
+        }
+        if (!temTipoAniv)
+        {
+            using var alter = conn.CreateCommand();
+            alter.CommandText = "ALTER TABLE Configuracoes ADD COLUMN TipoDividaAniversario INTEGER NOT NULL DEFAULT 1;";
+            alter.ExecuteNonQuery();
+        }
+    }
+    using (var seedCfgCmd = conn.CreateCommand())
+    {
+        seedCfgCmd.CommandText = "INSERT OR IGNORE INTO Configuracoes (Id, ExigirAceiteDivida, TipoDividaAniversario) VALUES (1, 1, 1);";
+        seedCfgCmd.ExecuteNonQuery();
     }
     conn.Close();
 
@@ -109,7 +149,7 @@ using (var scope = app.Services.CreateScope())
         var admin = new Usuario
         {
             Nome = "Administrador",
-            Email = "admin@salgados.com",
+            Login = "admin",
             PerfilId = 1,
             Ativo = true
         };

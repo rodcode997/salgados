@@ -128,7 +128,8 @@ AppDbContext ──► SQLite (salgados.db)
   - Usuários com permissão `dividas.quitar` podem aprovar/recusar pagamentos pendentes ou registrar pagamentos já aprovados diretamente, marcando a dívida como **Quitada**.
 
 ### 3. Equipe / Usuários e Avatares Personalizáveis
-- Cadastro, edição, ativação/desativação de usuários e visualização da situação detalhada de cada pessoa (pendentes, em aberto e histórico).
+- Cadastro com **login em texto aberto**, **data de nascimento obrigatória**, edição, ativação/desativação de usuários e visualização da situação detalhada de cada pessoa (pendentes, em aberto e histórico).
+- **Aniversário automático:** um serviço em segundo plano (`AniversarioHostedService`) verifica na inicialização da API e a cada hora os usuários ativos aniversariantes do dia (e também ao cadastrar/editar um usuário), gerando automaticamente a dívida de aniversário no tipo escolhido em **Configurações** (no máximo 1 por ano).
 - **Editor de Avatar** (no cadastro/edição de usuários e acessível a qualquer usuário logado clicando no próprio avatar na barra lateral):
   - Gênero (**Feminino** / **Masculino**);
   - Estilo de cabelo (6 opções femininas / 6 opções masculinas, incluindo careca);
@@ -154,7 +155,9 @@ Códigos de permissão disponíveis:
 - `perfis.gerenciar`
 
 ### 6. Configurações do Sistema
-- Tela exclusiva para perfis com `perfis.gerenciar` com interruptor para **Exigir aceite de dívidas** (persistido na tabela `Configuracoes`).
+- Tela exclusiva para perfis com `perfis.gerenciar` com:
+  - Interruptor para **Exigir aceite de dívidas**;
+  - Seletor do **tipo da dívida automática de aniversário** (*Cento de salgados* ou *Caixa de chocolate*).
 
 ---
 
@@ -213,7 +216,7 @@ npm run dev
 A aplicação estará acessível em `http://localhost:5173`.
 
 ### Credenciais padrão (Administrador)
-- **E-mail:** `admin@salgados.com`
+- **Login:** `admin`
 - **Senha:** `Admin@123`
 
 > **Dica:** Para gerar o build de produção do frontend, execute `npm run build` dentro da pasta `web/`. Em ambiente de produção, lembre-se de substituir a chave `Jwt:Key` em `api/appsettings.json` por uma variável de ambiente segura.

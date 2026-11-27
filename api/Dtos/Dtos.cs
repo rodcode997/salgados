@@ -46,11 +46,11 @@ public record DividaDto(
     List<PagamentoDto> Pagamentos);
 
 // Autenticação, Usuários (Pessoas), Perfis e Permissões
-public record LoginInput([Required, EmailAddress] string Email, [Required] string Senha);
+public record LoginInput([Required, MaxLength(100)] string Login, [Required] string Senha);
 public record AlterarSenhaInput([Required] string SenhaAtual, [Required, MinLength(6)] string NovaSenha);
 public record AlterarAvatarInput([MaxLength(500)] string? Avatar);
 
-public record UsuarioSessaoDto(int Id, string Nome, string Email, string? Avatar, int PerfilId, string Perfil, List<string> Permissoes);
+public record UsuarioSessaoDto(int Id, string Nome, string Login, string? Avatar, int PerfilId, string Perfil, List<string> Permissoes);
 public record LoginDto(string Token, DateTime ExpiraEm, UsuarioSessaoDto Usuario);
 
 public record PermissaoDto(int Id, string Codigo, string Descricao, string Modulo);
@@ -66,24 +66,26 @@ public record PerfilDto(
 
 public record UsuarioCreateInput(
     [Required, MaxLength(150)] string Nome,
-    [Required, EmailAddress, MaxLength(200)] string Email,
+    [Required, MaxLength(100)] string Login,
     [Required, MinLength(6)] string Senha,
     [Range(1, int.MaxValue)] int PerfilId,
+    [Required] DateTime DataNascimento,
     [MaxLength(500)] string? Avatar = null);
 
 public record UsuarioUpdateInput(
     [Required, MaxLength(150)] string Nome,
-    [Required, EmailAddress, MaxLength(200)] string Email,
+    [Required, MaxLength(100)] string Login,
     [Range(1, int.MaxValue)] int PerfilId,
+    [Required] DateTime DataNascimento,
     string? NovaSenha,
     [MaxLength(500)] string? Avatar = null);
 
 public record UsuarioDto(
-    int Id, string Nome, string Email, string? Avatar, bool Ativo,
+    int Id, string Nome, string Login, DateTime? DataNascimento, string? Avatar, bool Ativo,
     DateTime CriadoEm, int PerfilId, string Perfil,
     int DividasAbertas, int TotalDividas, string? Mensagem);
 
 public record SituacaoDto(UsuarioDto Usuario, List<DividaDto> Pendentes, List<DividaDto> Abertas, List<DividaDto> Historico);
 
-public record ConfiguracaoDto(bool ExigirAceiteDivida);
-public record ConfiguracaoInput(bool ExigirAceiteDivida);
+public record ConfiguracaoDto(bool ExigirAceiteDivida, TipoDivida TipoDividaAniversario);
+public record ConfiguracaoInput(bool ExigirAceiteDivida, TipoDivida TipoDividaAniversario);

@@ -120,17 +120,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<Usuario>(e =>
         {
             e.Property(u => u.Nome).HasMaxLength(150).IsRequired();
-            e.Property(u => u.Email).HasMaxLength(200).IsRequired();
+            e.Property(u => u.Login).HasMaxLength(100).IsRequired();
             e.Property(u => u.SenhaHash).IsRequired();
             e.Property(u => u.Avatar).HasMaxLength(500);
-            e.HasIndex(u => u.Email).IsUnique();
+            e.HasIndex(u => u.Login).IsUnique();
             e.HasOne(u => u.Perfil).WithMany(p => p.Usuarios).HasForeignKey(u => u.PerfilId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<ConfiguracaoSistema>(e =>
         {
             e.HasKey(c => c.Id);
-            e.HasData(new ConfiguracaoSistema { Id = 1, ExigirAceiteDivida = true });
+            e.HasData(new ConfiguracaoSistema { Id = 1, ExigirAceiteDivida = true, TipoDividaAniversario = TipoDivida.CentoSalgado });
         });
     }
 }

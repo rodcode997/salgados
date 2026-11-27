@@ -241,7 +241,7 @@ export default function App() {
               exec={exec}
               tem={tem}
               usuarioLogado={usuario}
-              onUpdateSessao={(u) => setUsuario((prev) => (prev && prev.id === u.id ? { ...prev, nome: u.nome, email: u.email, avatar: u.avatar } : prev))}
+              onUpdateSessao={(u) => setUsuario((prev) => (prev && prev.id === u.id ? { ...prev, nome: u.nome, login: u.login, avatar: u.avatar } : prev))}
             />
           )}
           {pag === 'motivos' && <Motivos exec={exec} tem={tem} />}
@@ -271,7 +271,7 @@ export default function App() {
 }
 
 function TelaLogin({ onLogin, avisar }) {
-  const [email, setEmail] = useState('')
+  const [login, setLogin] = useState('')
   const [senha, setSenha] = useState('')
   const [entrando, setEntrando] = useState(false)
 
@@ -279,7 +279,7 @@ function TelaLogin({ onLogin, avisar }) {
     e.preventDefault()
     setEntrando(true)
     try {
-      const res = await api.login(email, senha)
+      const res = await api.login(login, senha)
       onLogin(res)
     } catch (err) {
       avisar(err.message, 'erro')
@@ -300,14 +300,14 @@ function TelaLogin({ onLogin, avisar }) {
           <p>Entre para acompanhar salgados e chocolates 🥟🍫</p>
         </div>
         <form className="coluna" onSubmit={entrar}>
-          <label>E-mail<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" required autoFocus /></label>
+          <label>Login<input type="text" value={login} onChange={(e) => setLogin(e.target.value)} placeholder="seu.login" required autoFocus /></label>
           <label>Senha<input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="••••••••" required /></label>
           <button className="grande" style={{ justifyContent: 'center', marginTop: 6 }} disabled={entrando}>
             {entrando ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
         <div className="login-dica">
-          Admin padrão: <code>admin@salgados.com</code> / <code>Admin@123</code>
+          Admin padrão: <code>admin</code> / <code>Admin@123</code>
         </div>
       </div>
     </div>
@@ -903,7 +903,11 @@ function Situacao({ id, exec, tem, usuarioLogado, onClose }) {
           <Avatar nome={s.usuario.nome} avatar={s.usuario.avatar} grande />
           <div>
             <h2>{s.usuario.nome}</h2>
-            <p>{s.usuario.email} · {s.usuario.perfil} · {s.abertas.length} em aberto · {s.historico.length} no histórico</p>
+            <p>
+              @{s.usuario.login}
+              {s.usuario.dataNascimento && ` · 🎂 ${fmtCurta(s.usuario.dataNascimento)}`}
+              {` · ${s.usuario.perfil} · ${s.abertas.length} em aberto · ${s.historico.length} no histórico`}
+            </p>
           </div>
         </div>
         {s.abertas.length === 0 ? (
@@ -939,7 +943,7 @@ function Usuarios({ exec, tem, usuarioLogado, onUpdateSessao }) {
   const [busca, setBusca] = useState('')
   const [sel, setSel] = useState(null)
   const [editando, setEditando] = useState(null)
-  const [form, setForm] = useState({ nome: '', email: '', senha: '', perfilId: '', avatar: avatarPadrao('M') })
+  const [form, setForm] = useState({ nome: '', login: '', dataNascimento: '', senha: '', perfilId: '', avatar: avatarPadrao('M') })
   const podeGerenciar = tem(PERM.USUARIOS_GERENCIAR)
 
   const carregar = () => exec(api.usuarios).then((u) => Array.isArray(u) && setUsuarios(u))
@@ -949,12 +953,19 @@ function Usuarios({ exec, tem, usuarioLogado, onUpdateSessao }) {
   }, [podeGerenciar])
 
   const abrirNovo = () => {
-    setForm({ nome: '', email: '', senha: '', perfilId: perfis[0]?.id ?? '', avatar: avatarPadrao('M') })
+    setForm({ nome: '', login: '', dataNascimento: '', senha: '', perfilId: perfis[0]?.id ?? '', avatar: avatarPadrao('M') })
     setEditando('novo')
   }
   const abrirEdicao = (e, u) => {
     e.stopPropagation()
-    setForm({ nome: u.nome, email: u.email, senha: '', perfilId: u.perfilId, avatar: parseAvatar(u.avatar) || avatarPadrao('M') })
+    setForm({
+      nome: u.nome,
+      login: u.login,
+      dataNascimento: u.dataNascimento ? u.dataNascimento.slice(0, 10) : '',
+      senha: '',
+      perfilId: u.perfilId,
+      avatar: parseAvatar(u.avatar) || avatarPadrao('M')
+    })
     setEditando(u)
   }
 
@@ -962,8 +973,8 @@ function Usuarios({ exec, tem, usuarioLogado, onUpdateSessao }) {
     e.preventDefault()
     const avatarJson = serializeAvatar(form.avatar)
     const ok = editando === 'novo'
-      ? await exec(() => api.criarUsuario({ nome: form.nome, email: form.email, senha: form.senha, perfilId: +form.perfilId, avatar: avatarJson }), 'Usuário criado!')
-      : await exec(() => api.atualizarUsuario(editando.id, { nome: form.nome, email: form.email, perfilId: +form.perfilId, novaSenha: form.senha || null, avatar: avatarJson }), 'Usuário atualizado!')
+      ? await exec(() => api.criarUsuario({ nome: form.nome, login: form.login, dataNascimento: form.dataNascimento, senha: form.senha, perfilId: +form.perfilId, avatar: avatarJson }), 'Usuário criado!')
+      : await exec(() => api.atualizarUsuario(editando.id, { nome: form.nome, login: form.login, dataNascimento: form.dataNascimento, perfilId: +form.perfilId, novaSenha: form.senha || null, avatar: avatarJson }), 'Usuário atualizado!')
     if (ok) {
       if (editando !== 'novo' && ok?.id && onUpdateSessao) onUpdateSessao(ok)
       setEditando(null)
@@ -976,7 +987,7 @@ function Usuarios({ exec, tem, usuarioLogado, onUpdateSessao }) {
     if (await exec(() => api.ativoUsuario(u.id, !u.ativo), u.ativo ? 'Usuário desativado' : 'Usuário ativado')) carregar()
   }
 
-  const lista = usuarios.filter((u) => (u.nome + u.email + u.perfil).toLowerCase().includes(busca.toLowerCase()))
+  const lista = usuarios.filter((u) => (u.nome + u.login + u.perfil).toLowerCase().includes(busca.toLowerCase()))
 
   return (
     <>
@@ -984,7 +995,7 @@ function Usuarios({ exec, tem, usuarioLogado, onUpdateSessao }) {
         <div className="card-cab">
           <div><h3>Equipe / Usuários</h3><p>{usuarios.length} pessoa(s) cadastrada(s)</p></div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <div className="campo-busca"><Search size={18} /><input placeholder="Buscar pessoa ou e-mail" value={busca} onChange={(e) => setBusca(e.target.value)} /></div>
+            <div className="campo-busca"><Search size={18} /><input placeholder="Buscar pessoa ou login" value={busca} onChange={(e) => setBusca(e.target.value)} /></div>
             {podeGerenciar && <button onClick={abrirNovo}><Plus size={18} />Novo usuário</button>}
           </div>
         </div>
@@ -994,7 +1005,7 @@ function Usuarios({ exec, tem, usuarioLogado, onUpdateSessao }) {
               <div key={u.id} className="pessoa" style={{ opacity: u.ativo ? 1 : .55 }} onClick={() => setSel(u.id)}>
                 <Avatar nome={u.nome} avatar={u.avatar} grande />
                 <h4>{u.nome}</h4>
-                <small>{u.email}</small>
+                <small>@{u.login}{u.dataNascimento ? ` · 🎂 ${fmtCurta(u.dataNascimento)}` : ''}</small>
                 <span className="badge b-neutro"><Shield size={12} />{u.perfil}</span>
                 <small>{u.totalDividas} dívida(s) no histórico</small>
                 {u.dividasAbertas
@@ -1022,7 +1033,8 @@ function Usuarios({ exec, tem, usuarioLogado, onUpdateSessao }) {
           <form id="f-user" className="coluna" onSubmit={salvar}>
             <EditorAvatar nome={form.nome} value={form.avatar} onChange={(avatar) => setForm({ ...form, avatar })} />
             <label>Nome completo<input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} required /></label>
-            <label>E-mail<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></label>
+            <label>Login<input type="text" value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} placeholder="ex.: joao.silva" required /></label>
+            <label>Data de nascimento<input type="date" value={form.dataNascimento} max={hoje()} onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })} required /></label>
             <label>Perfil
               <select value={form.perfilId} onChange={(e) => setForm({ ...form, perfilId: e.target.value })} required>
                 <option value="">Selecione</option>
@@ -1201,12 +1213,9 @@ function Configuracoes({ exec }) {
     exec(api.configuracoes).then((r) => r && setCfg(r))
   }, [])
 
-  const alternarAceite = async (ativo) => {
+  const salvarCfg = async (proximo, msg) => {
     setSalvando(true)
-    const r = await exec(
-      () => api.atualizarConfiguracoes({ exigirAceiteDivida: ativo }),
-      ativo ? 'Aceite de dívidas ativado!' : 'Aceite desativado — dívidas irão direto em aberto!'
-    )
+    const r = await exec(() => api.atualizarConfiguracoes(proximo), msg)
     if (r) setCfg(r)
     setSalvando(false)
   }
@@ -1243,10 +1252,48 @@ function Configuracoes({ exec }) {
                   type="checkbox"
                   checked={cfg.exigirAceiteDivida}
                   disabled={salvando}
-                  onChange={(e) => alternarAceite(e.target.checked)}
+                  onChange={(e) =>
+                    salvarCfg(
+                      { ...cfg, exigirAceiteDivida: e.target.checked },
+                      e.target.checked ? 'Aceite de dívidas ativado!' : 'Aceite desativado — dívidas irão direto em aberto!'
+                    )
+                  }
                 />
                 <span className="switch-trilha" />
               </label>
+            </div>
+
+            <div className="config-item">
+              <div className="config-info">
+                <div className="config-titulo">
+                  <h4>🎂 Dívida automática de aniversário</h4>
+                  <span className="badge b-aberta">
+                    {TIPOS[cfg.tipoDividaAniversario]?.emo} {TIPOS[cfg.tipoDividaAniversario]?.nome}
+                  </span>
+                </div>
+                <p>
+                  No dia do aniversário de cada usuário ativo, o sistema gera automaticamente uma dívida do tipo escolhido abaixo (no máximo uma por ano).
+                </p>
+              </div>
+              <div className="seg">
+                {Object.entries(TIPOS).map(([k, v]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    disabled={salvando}
+                    className={cfg.tipoDividaAniversario === k ? 'ativo' : ''}
+                    onClick={() =>
+                      cfg.tipoDividaAniversario !== k &&
+                      salvarCfg(
+                        { ...cfg, tipoDividaAniversario: k },
+                        `Dívida de aniversário definida como ${v.nome}!`
+                      )
+                    }
+                  >
+                    {v.emo} {v.nome}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

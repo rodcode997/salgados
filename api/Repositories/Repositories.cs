@@ -8,6 +8,7 @@ public interface IMotivoRepository
 {
     Task<List<Motivo>> ListarAsync();
     Task<Motivo?> ObterAsync(int id);
+    Task<Motivo?> ObterPorDescricaoAsync(string descricao);
     Task AdicionarAsync(Motivo m);
     Task SalvarAsync();
 }
@@ -17,6 +18,7 @@ public interface IDividaRepository
     Task<List<Divida>> ListarAsync(int? usuarioId, StatusDivida? status);
     Task<Divida?> ObterAsync(int id);
     Task<Pagamento?> ObterPagamentoAsync(int pagamentoId);
+    Task<bool> ExisteAniversarioNoAnoAsync(int usuarioId, int motivoId, int ano);
     Task AdicionarAsync(Divida d);
     Task SalvarAsync();
 }
@@ -39,9 +41,11 @@ public interface IPerfilRepository
 public interface IUsuarioRepository
 {
     Task<List<Usuario>> ListarAsync();
+    Task<List<Usuario>> ListarAtivosComNascimentoAsync();
     Task<Usuario?> ObterAsync(int id);
     Task<Usuario?> ObterComDividasAsync(int id);
-    Task<Usuario?> ObterPorEmailAsync(string email);
+    Task<Usuario?> ObterPorLoginAsync(string login);
+    Task<Usuario?> ObterPrimeiroAdminAsync();
     Task AdicionarAsync(Usuario u);
     Task SalvarAsync();
 }
@@ -50,6 +54,8 @@ public class MotivoRepository(AppDbContext db) : IMotivoRepository
 {
     public Task<List<Motivo>> ListarAsync() => db.Motivos.OrderBy(m => m.Descricao).ToListAsync();
     public Task<Motivo?> ObterAsync(int id) => db.Motivos.FindAsync(id).AsTask();
+    public Task<Motivo?> ObterPorDescricaoAsync(string descricao) =>
+        db.Motivos.FirstOrDefaultAsync(m => m.Descricao.ToLower() == descricao.ToLower());
     public async Task AdicionarAsync(Motivo m) => await db.Motivos.AddAsync(m);
     public Task SalvarAsync() => db.SaveChangesAsync();
 }
@@ -91,6 +97,12 @@ public class DividaRepository(AppDbContext db) : IDividaRepository
             .AsSplitQuery()
             .FirstOrDefaultAsync(p => p.Id == pagamentoId);
 
+    public Task<bool> ExisteAniversarioNoAnoAsync(int usuarioId, int motivoId, int ano) =>
+        db.Dividas.AnyAsync(d =>
+            d.UsuarioId == usuarioId &&
+            d.MotivoId == motivoId &&
+            d.DataAquisicao.Year == ano);
+
     public async Task AdicionarAsync(Divida d) => await db.Dividas.AddAsync(d);
     public Task SalvarAsync() => db.SaveChangesAsync();
 }
@@ -126,6 +138,8 @@ public class UsuarioRepository(AppDbContext db) : IUsuarioRepository
 {
     public Task<List<Usuario>> ListarAsync() =>
         db.Usuarios.Include(u => u.Perfil).Include(u => u.Dividas).OrderBy(u => u.Nome).ToListAsync();
+    public Task<List<Usuario>> ListarAtivosComNascimentoAsync() =>
+        db.Usuarios.Where(u => u.Ativo && u.DataNascimento != null).ToListAsync();
     public Task<Usuario?> ObterAsync(int id) =>
         db.Usuarios
             .Include(u => u.Perfil!).ThenInclude(p => p.Permissoes).ThenInclude(pp => pp.Permissao)
@@ -142,10 +156,12 @@ public class UsuarioRepository(AppDbContext db) : IUsuarioRepository
             .Include(u => u.Dividas).ThenInclude(d => d.Pagamentos).ThenInclude(p => p.AvaliadoPor)
             .AsSplitQuery()
             .FirstOrDefaultAsync(u => u.Id == id);
-    public Task<Usuario?> ObterPorEmailAsync(string email) =>
+    public Task<Usuario?> ObterPorLoginAsync(string login) =>
         db.Usuarios
             .Include(u => u.Perfil!).ThenInclude(p => p.Permissoes).ThenInclude(pp => pp.Permissao)
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+            .FirstOrDefaultAsync(u => u.Login.ToLower() == login.ToLower());
+    public Task<Usuario?> ObterPrimeiroAdminAsync() =>
+        db.Usuarios.OrderBy(u => u.PerfilId == 1 ? 0 : 1).ThenBy(u => u.Id).FirstOrDefaultAsync();
     public async Task AdicionarAsync(Usuario u) => await db.Usuarios.AddAsync(u);
     public Task SalvarAsync() => db.SaveChangesAsync();
 }

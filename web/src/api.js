@@ -32,7 +32,7 @@ async function req(path, options = {}) {
 
 export const api = {
   // Auth
-  login: (email, senha) => req('/auth/login', { method: 'POST', body: { email, senha } }),
+  login: (login, senha) => req('/auth/login', { method: 'POST', body: { login, senha } }),
   me: () => req('/auth/me'),
   alterarSenha: (d) => req('/auth/alterar-senha', { method: 'POST', body: d }),
   alterarAvatar: (avatar) => req('/auth/avatar', { method: 'PUT', body: { avatar } }),
